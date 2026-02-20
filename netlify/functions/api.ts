@@ -3,7 +3,10 @@ import type { Handler, HandlerEvent } from '@netlify/functions';
 import * as jose from 'jose';
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NETLIFY_JWT_SECRET || 'craftric-dev-secret-change-in-production';
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  process.env.NEON_DATABASE_URL ||
+  process.env.POSTGRES_URL;
 
 const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
 
@@ -92,7 +95,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
   }
 
   if (!sql) {
-    return err('Database not configured. Set DATABASE_URL.', 503);
+    return err(
+      'Database not configured. In Netlify: Site configuration → Environment variables → add DATABASE_URL with your Neon connection string, then redeploy.',
+      503
+    );
   }
 
   const pathFromQuery = (event.queryStringParameters?.path as string) || '';
