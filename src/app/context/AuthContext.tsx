@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { isXanoEnabled, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
+import { isXanoEnabled, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, xanoDelete, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
 
 const TOKEN_KEY = 'craftric_auth_token';
 
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   };
 
-  const deleteUser = (id: string) => {
+  const deleteUser = async (id: string) => {
     if (!isXanoEnabled()) {
       const user = users.find((u) => u.id === id);
       if (user) delete userPasswords[user.email];
@@ -162,7 +162,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (!token) return;
-    // XANO: would call xanoDelete(XANO_ENDPOINTS.users, id, token) and setUsers
+    try {
+      await xanoDelete(XANO_ENDPOINTS.users, id, token);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (_) {
+      // Error already surfaced by API; keep UI in sync on success only
+    }
   };
 
   const addUser = async (user: Omit<User, 'id' | 'createdAt'>) => {

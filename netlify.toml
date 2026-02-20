@@ -3,8 +3,15 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# API: proxy /api/* to the serverless function (must be first)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api?path=:splat"
   status = 200
   force = true
+
+# SPA: serve index.html for all other routes so client-side routing works on reload
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
