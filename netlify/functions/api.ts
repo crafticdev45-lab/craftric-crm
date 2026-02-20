@@ -161,6 +161,17 @@ export const handler: Handler = async (event: HandlerEvent) => {
       return json(rowToCamel(user));
     }
 
+    if (path === '/auth/send-reset-link' && method === 'POST') {
+      const auth = await getAuth(event);
+      if (!auth) return err('Unauthorized', 401);
+      const email = (body.email as string)?.trim?.();
+      if (!email) return err('Email required');
+      const rows = await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
+      if (rows.length === 0) return err('No user found with this email', 404);
+      // TODO: generate reset token, store it, and send email via your provider (SendGrid, Resend, etc.)
+      return json({ success: true, message: 'If an account exists, a reset link has been sent.' });
+    }
+
     return err('Not found', 404);
   }
 

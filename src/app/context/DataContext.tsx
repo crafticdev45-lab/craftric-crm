@@ -41,42 +41,15 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Mock data
 const now = () => new Date().toISOString();
-
-const initialCustomers: Customer[] = [
-  { id: '1', name: 'Acme Corporation', status: 'active', leadId: '1', createdAt: '2024-01-15', lastModifiedBy: '1', lastModifiedAt: '2024-01-15T12:00:00Z' },
-  { id: '2', name: 'TechStart Inc', status: 'active', leadId: '2', createdAt: '2024-02-01', lastModifiedBy: '1', lastModifiedAt: '2024-02-01T12:00:00Z' },
-];
-
-const initialContacts: Contact[] = [
-  { id: '1', customerId: '1', name: 'Jane Doe', email: 'jane.doe@acmecorp.com', phone: '+1-555-0103', role: 'Project Manager', lastModifiedBy: '1', lastModifiedAt: '2024-01-15T12:00:00Z' },
-  { id: '2', customerId: '1', name: 'Bob Wilson', email: 'bob.w@acmecorp.com', phone: '+1-555-0104', role: 'Technical Lead', lastModifiedBy: '1', lastModifiedAt: '2024-01-15T12:00:00Z' },
-];
-
-const initialProducts: Product[] = [
-  { id: '1', name: 'Enterprise Software Suite', description: 'Complete business management solution', category: 'Software', createdAt: '2023-11-01', lastModifiedBy: '1', lastModifiedAt: '2023-11-01T12:00:00Z' },
-  { id: '2', name: 'Hardware Server', description: 'High-performance server hardware', category: 'Hardware', createdAt: '2023-12-15', lastModifiedBy: '1', lastModifiedAt: '2023-12-15T12:00:00Z' },
-];
-
-const initialModels: Model[] = [
-  { id: '1', productId: '1', name: 'Basic Edition', sku: 'ESS-BASIC-001', stock: 150, price: 299.99, lastModifiedBy: '1', lastModifiedAt: '2023-11-01T12:00:00Z' },
-  { id: '2', productId: '1', name: 'Professional Edition', sku: 'ESS-PRO-001', stock: 75, price: 599.99, lastModifiedBy: '1', lastModifiedAt: '2023-11-01T12:00:00Z' },
-  { id: '3', productId: '2', name: 'Standard Server', sku: 'HW-SRV-STD-001', stock: 25, price: 2499.99, lastModifiedBy: '1', lastModifiedAt: '2023-12-15T12:00:00Z' },
-];
-
-const initialLeads: Lead[] = [
-  { id: '1', name: 'Michael Chen', email: 'mchen@globaltech.com', phone: '+1-555-0301', company: 'Global Tech Solutions', status: 'new', source: 'Website', value: 15000, createdAt: '2024-02-10', createdBy: '1', lastModifiedBy: '1', lastModifiedAt: '2024-02-10T12:00:00Z' },
-  { id: '2', name: 'Emily Rodriguez', email: 'emily.r@innovate.co', phone: '+1-555-0302', company: 'Innovate Co', status: 'contacted', source: 'Referral', value: 25000, createdAt: '2024-02-08', createdBy: '2', lastModifiedBy: '2', lastModifiedAt: '2024-02-08T12:00:00Z' },
-];
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { currentUser, token } = useAuth();
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-  const [contacts, setContacts] = useState<Contact[]>(initialContacts);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [models, setModels] = useState<Model[]>(initialModels);
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,31 +68,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       xanoList<unknown>(XANO_ENDPOINTS.leads, t),
     ])
       .then(([c, ct, p, m, l]) => {
-        setCustomers(
-          (c as unknown[]).length
-            ? (c as unknown[]).map((r) => normalizeXanoRecord<Customer>(r) as Customer)
-            : initialCustomers
-        );
-        setContacts(
-          (ct as unknown[]).length
-            ? (ct as unknown[]).map((r) => normalizeXanoRecord<Contact>(r) as Contact)
-            : initialContacts
-        );
-        setProducts(
-          (p as unknown[]).length
-            ? (p as unknown[]).map((r) => normalizeXanoRecord<Product>(r) as Product)
-            : initialProducts
-        );
-        setModels(
-          (m as unknown[]).length
-            ? (m as unknown[]).map((r) => normalizeXanoRecord<Model>(r) as Model)
-            : initialModels
-        );
-        setLeads(
-          (l as unknown[]).length
-            ? (l as unknown[]).map((r) => normalizeXanoRecord<Lead>(r) as Lead)
-            : initialLeads
-        );
+        setCustomers((c as unknown[]).map((r) => normalizeXanoRecord<Customer>(r) as Customer));
+        setContacts((ct as unknown[]).map((r) => normalizeXanoRecord<Contact>(r) as Contact));
+        setProducts((p as unknown[]).map((r) => normalizeXanoRecord<Product>(r) as Product));
+        setModels((m as unknown[]).map((r) => normalizeXanoRecord<Model>(r) as Model));
+        setLeads((l as unknown[]).map((r) => normalizeXanoRecord<Lead>(r) as Lead));
       })
       .catch((err) => setError(err?.message ?? 'Failed to load data'))
       .finally(() => setIsLoading(false));

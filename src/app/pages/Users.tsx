@@ -4,7 +4,7 @@ import { usePermissions } from '../context/PermissionsContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Mail, User as UserIcon, Shield, Trash2 } from 'lucide-react';
+import { Plus, Mail, User as UserIcon, Shield, Trash2, Pencil, MailCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -21,9 +21,12 @@ const OBJECT_LABELS: Record<ObjectType, string> = {
 };
 
 export function Users() {
-  const { users, addUser, deleteUser, currentUser } = useAuth();
-  const { canAdd, canDelete, canManagePermissions, getUserPermissions, updateUserPermissions } = usePermissions();
+  const { users, addUser, updateUser, deleteUser, currentUser, sendPasswordResetLink } = useAuth();
+  const { canAdd, canEdit, canDelete, canManagePermissions, getUserPermissions, updateUserPermissions } = usePermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '' });
+  const [resetLinkSending, setResetLinkSending] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -43,6 +46,34 @@ export function Users() {
       return;
     }
     if (window.confirm(`Delete user ${user.name}?`)) deleteUser(user.id);
+  };
+
+  const openEditDialog = (user: { id: string; name: string; email: string; role: string }) => {
+    setEditingUser(user);
+    setEditForm({ name: user.name, email: user.email });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    updateUser(editingUser.id, { name: editForm.name.trim(), email: editForm.email.trim() });
+    setEditingUser(null);
+  };
+
+  const handleSendResetLink = async () => {
+    const email = editForm.email.trim();
+    if (!email) {
+      window.alert('Enter the user’s email first.');
+      return;
+    }
+    setResetLinkSending(true);
+    const result = await sendPasswordResetLink(email);
+    setResetLinkSending(false);
+    if (result.success) {
+      window.alert(`Password reset link sent to ${email}.`);
+    } else {
+      window.alert(result.error ?? 'Failed to send reset link.');
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -127,16 +158,29 @@ export function Users() {
                     <p className="text-sm text-gray-600">{user.email}</p>
                   </div>
                 </div>
-                {canDelete('users') && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8"
-                    onClick={() => handleDeleteUser(user)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {canEdit('users') && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 h-8 w-8"
+                      onClick={() => openEditDialog(user)}
+                      title="Edit user"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {canDelete('users') && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8"
+                      onClick={() => handleDeleteUser(user)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="space-y-3 mt-4">
                 <div className="flex items-center justify-between">
@@ -167,6 +211,48 @@ export function Users() {
           <p className="text-gray-500">No users found</p>
         </div>
       )}
+
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit user</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <Button type="submit" className="w-full">Save changes</Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={resetLinkSending}
+                onClick={handleSendResetLink}
+              >
+                <MailCheck className="w-4 h-4 mr-2" />
+                {resetLinkSending ? 'Sending…' : 'Send reset password link'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { isXanoEnabled, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, xanoDelete, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
+import { isXanoEnabled, isNeonApi, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, xanoUpdate, xanoDelete, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
+
+const NEON_API_URL = import.meta.env.VITE_API_URL ?? '';
 
 const TOKEN_KEY = 'craftric_auth_token';
 
@@ -36,34 +38,28 @@ interface AuthContextType {
   logout: () => void;
   users: User[];
   addUser: (user: Omit<User, 'id' | 'createdAt'>) => void;
+  updateUser: (id: string, updates: Partial<Pick<User, 'name' | 'email'>>) => Promise<void>;
   deleteUser: (id: string) => void;
   requestPasswordReset: (email: string) => { success: boolean; error?: string };
+  sendPasswordResetLink: (email: string) => Promise<{ success: boolean; error?: string }>;
   token: string | null;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const initialUsers: User[] = [
-  { id: '1', name: 'Craftric Admin', email: 'crafticdev45@gmail.com', role: 'admin', createdAt: '2024-01-01' },
-  { id: '2', name: 'Sarah Sales', email: 'sarah@company.com', role: 'sales', createdAt: '2024-01-15' },
-];
-
-// Mock passwords (email -> password). In production, use XANO auth.
-const userPasswords: Record<string, string> = {
-  'crafticdev45@gmail.com': 'project@123',
-  'sarah@company.com': 'sales@123',
-};
+// Mock mode only: in-memory store for added users' passwords (not used when backend/Neon is configured).
+const userPasswords: Record<string, string> = {};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(isXanoEnabled());
 
   useEffect(() => {
     if (!isXanoEnabled()) {
-      setUsers(initialUsers);
+      setUsers([]);
       setIsLoading(false);
       return;
     }
@@ -150,8 +146,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Email does not exist.' };
     }
     // In a real app, send email here. For mock, we simulate success.
-    // The user would receive an email with their password.
     return { success: true };
+  };
+
+  const sendPasswordResetLink = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = (email || '').trim().toLowerCase();
+    if (!trimmed) return { success: false, error: 'Email is required.' };
+    if (!isNeonApi() || !NEON_API_URL) {
+      return { success: false, error: 'Password reset link is only available when using the Neon API.' };
+    }
+    if (!token) return { success: false, error: 'You must be logged in to send a reset link.' };
+    try {
+      const base = NEON_API_URL.replace(/\/$/, '');
+      const res = await fetch(`${base}/auth/send-reset-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        return { success: false, error: data.error ?? res.statusText ?? 'Failed to send reset link.' };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: (e as Error)?.message ?? 'Failed to send reset link.' };
+    }
+  };
+
+  const updateUser = async (id: string, updates: Partial<Pick<User, 'name' | 'email'>>) => {
+    if (!isXanoEnabled()) {
+      const prev = users.find((u) => u.id === id);
+      if (!prev) return;
+      const newEmail = updates.email?.trim().toLowerCase();
+      if (newEmail && prev.email !== newEmail && userPasswords[prev.email] !== undefined) {
+        userPasswords[newEmail] = userPasswords[prev.email];
+        delete userPasswords[prev.email];
+      }
+      const ts = new Date().toISOString();
+      setUsers((prevUsers) =>
+        prevUsers.map((u) =>
+          u.id === id ? { ...u, ...updates, lastModifiedBy: currentUser?.id, lastModifiedAt: ts } : u
+        )
+      );
+      if (currentUser?.id === id && (updates.name ?? updates.email)) {
+        setCurrentUser((c) => (c ? { ...c, ...updates } : c));
+      }
+      return;
+    }
+    if (!token) return;
+    try {
+      const updated = await xanoUpdate<User>(XANO_ENDPOINTS.users, id, updates as Record<string, unknown>, token);
+      if (updated) {
+        setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...updated } : u)));
+        if (currentUser?.id === id) setCurrentUser((c) => (c ? { ...c, ...updated } : c));
+      }
+    } catch (_) {}
   };
 
   const deleteUser = async (id: string) => {
@@ -193,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, users, addUser, deleteUser, requestPasswordReset, token, isLoading }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, users, addUser, updateUser, deleteUser, requestPasswordReset, sendPasswordResetLink, token, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
