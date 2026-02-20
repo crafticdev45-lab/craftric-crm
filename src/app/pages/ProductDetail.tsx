@@ -14,7 +14,7 @@ export function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { products, getModelsByProduct, addModel, deleteModel, deleteProduct, updateModel } = useData();
-  const { canEdit, canDelete, canAdd } = usePermissions();
+  const { canRead, canEdit, canDelete, canAdd } = usePermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -25,6 +25,18 @@ export function ProductDetail() {
 
   const product = products.find(p => String(p.id) === String(id));
   const models = getModelsByProduct(id || '');
+
+  if (!canRead('products')) {
+    return (
+      <div className="p-8">
+        <p className="text-gray-600">You don&apos;t have permission to view this product.</p>
+        <Link to="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 mt-4">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -111,8 +123,9 @@ export function ProductDetail() {
           </CardContent>
         </Card>
 
+        {canRead('models') && (
         <Card>
-          <CardHeader>
+            <CardHeader>
             <CardTitle>Inventory Summary</CardTitle>
           </CardHeader>
           <CardContent>
@@ -132,8 +145,10 @@ export function ProductDetail() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
+      {canRead('models') && (
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -289,6 +304,7 @@ export function ProductDetail() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

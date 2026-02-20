@@ -40,17 +40,19 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const isAdmin = (currentUser?.role ?? '').toLowerCase() === 'admin';
 
   const getUserPermissions = useCallback((userId: string, objectType: ObjectType): ObjectPermissions => {
-    const userPerms = permissionsMap[userId];
+    const key = String(userId);
+    const userPerms = permissionsMap[key];
     const objPerms = userPerms?.[objectType];
     return objPerms ? { ...defaultPermissions, ...objPerms } : defaultPermissions;
   }, [permissionsMap]);
 
   const updateUserPermissions = useCallback((userId: string, objectType: ObjectType, perms: Partial<ObjectPermissions>) => {
     if (!isAdmin) return;
+    const key = String(userId);
     setPermissionsMap((prev) => {
       const next = { ...prev };
-      next[userId] = { ...next[userId] } as Record<ObjectType, ObjectPermissions>;
-      next[userId][objectType] = { ...defaultPermissions, ...next[userId][objectType], ...perms };
+      next[key] = { ...next[key] } as Record<ObjectType, ObjectPermissions>;
+      next[key][objectType] = { ...defaultPermissions, ...next[key][objectType], ...perms };
       savePermissions(next);
       return next;
     });

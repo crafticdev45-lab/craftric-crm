@@ -13,7 +13,15 @@ import { Label } from '../components/ui/label';
 
 export function Products() {
   const { products, addProduct, deleteProduct, getModelsByProduct } = useData();
-  const { canAdd, canDelete } = usePermissions();
+  const { canRead, canAdd, canDelete } = usePermissions();
+
+  if (!canRead('products')) {
+    return (
+      <div className="p-8">
+        <p className="text-gray-600">You don&apos;t have permission to view products.</p>
+      </div>
+    );
+  }
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({

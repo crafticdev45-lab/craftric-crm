@@ -1,19 +1,21 @@
 import { Link, Outlet, useLocation } from 'react-router';
 import { LayoutDashboard, Users, Package, UserPlus, UsersRound, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionsContext';
 import { Button } from './ui/button';
 
 export function Layout() {
   const location = useLocation();
   const { currentUser, logout } = useAuth();
+  const { canRead } = usePermissions();
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/customers', label: 'Companies', icon: Users },
-    { path: '/products', label: 'Products', icon: Package },
-    { path: '/leads', label: 'Leads', icon: UserPlus },
-    { path: '/users', label: 'Users', icon: UsersRound },
-  ];
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard, objectType: null as 'customers' | 'contacts' | 'products' | 'models' | 'leads' | 'users' | null },
+    { path: '/customers', label: 'Companies', icon: Users, objectType: 'customers' as const },
+    { path: '/products', label: 'Products', icon: Package, objectType: 'products' as const },
+    { path: '/leads', label: 'Leads', icon: UserPlus, objectType: 'leads' as const },
+    { path: '/users', label: 'Users', icon: UsersRound, objectType: 'users' as const },
+  ].filter((item) => item.objectType == null || canRead(item.objectType));
 
   const isActive = (path: string) => {
     if (path === '/') {
