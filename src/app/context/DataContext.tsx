@@ -126,8 +126,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isXanoEnabled()) return;
+    // Only fetch when logged in to avoid burning Xano rate limit on login page (5 list calls)
+    if (!token) return;
     fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, token]);
 
   const addCustomer = useCallback(async (customer: Omit<Customer, 'id' | 'createdAt'>) => {
     if (!isXanoEnabled()) {

@@ -73,4 +73,13 @@ In your project (and in Netlify env for the frontend if you deploy there):
 - **Netlify** = hosts the frontend and the API (Functions); set `DATABASE_URL` and `JWT_SECRET`.
 - **Frontend** = set `VITE_API_URL` to `https://<your-site>.netlify.app/api` (or local URL when using `netlify dev`).
 
+## If you see "Xano API request limit" after deploying to Netlify
+
+The deployed site is still using Xano (and its 10 requests / 20 sec limit) instead of your Netlify API. Fix it:
+
+1. In **Netlify** → your site → **Site configuration** → **Environment variables**:
+   - Add or set **`VITE_API_URL`** = `https://YOUR-SITE-NAME.netlify.app/api` (use your real site URL, no trailing slash).
+   - Remove **`VITE_XANO_BASE_URL`** if it exists (or leave it unset). Do not set it for production deploy.
+2. **Trigger a new deploy** (Deploys → Trigger deploy → Deploy site) so the build uses the new env. The app will then use the Neon/Netlify backend and stop calling Xano.
+
 After this, the app uses the Neon/Netlify backend and no longer hits Xano’s request limit.

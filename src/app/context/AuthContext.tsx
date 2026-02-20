@@ -114,10 +114,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Invalid email or password. Please try again.' };
       })
       .catch((err) => {
-        const message =
-          err instanceof RateLimitError
-            ? err.message
-            : 'Unable to sign in. Please check your connection and try again.';
+        let message: string;
+        if (err instanceof RateLimitError) {
+          message = err.message;
+        } else if (err instanceof Error) {
+          // Network/CORS failure
+          if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+            message = 'Unable to sign in. Please check your connection and try again.';
+          } else {
+            message = err.message;
+          }
+        } else {
+          message = 'Unable to sign in. Please check your connection and try again.';
+        }
         return { success: false, error: message };
       })
       .finally(() => setIsLoading(false));

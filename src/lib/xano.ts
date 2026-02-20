@@ -47,7 +47,15 @@ async function handleResponse<T>(res: Response, body?: string): Promise<T> {
     if (res.status === 429) {
       throw new RateLimitError(text || 'Too many requests. Please wait about 20 seconds and try again.');
     }
-    throw new Error(`XANO API error ${res.status}: ${text || res.statusText}`);
+    // Prefer API error message (e.g. "Invalid email or password", "Database not configured")
+    let message = text || res.statusText;
+    try {
+      const parsed = JSON.parse(text || '{}') as { error?: string };
+      if (typeof parsed?.error === 'string') message = parsed.error;
+    } catch {
+      /* use message as-is */
+    }
+    throw new Error(message);
   }
   const contentType = res.headers.get('content-type');
   if (contentType?.includes('application/json')) {
