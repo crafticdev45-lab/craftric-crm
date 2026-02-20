@@ -5,7 +5,7 @@ import { LastModified } from '../components/LastModified';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Search, Mail, Phone, Building, Trash2 } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Building, Trash2, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -15,6 +15,7 @@ export function Leads() {
   const { canAdd, canEdit, canDelete } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<typeof leads[0] | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -31,11 +32,37 @@ export function Leads() {
     (lead.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     addLead(formData);
     setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
     setIsDialogOpen(false);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLead) return;
+    updateLead(editingLead.id, formData);
+    setEditingLead(null);
+    setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
+  };
+
+  const openEditDialog = (lead: typeof leads[0]) => {
+    setEditingLead(lead);
+    setFormData({
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone ?? '',
+      company: lead.company,
+      status: lead.status,
+      source: lead.source ?? '',
+      value: lead.value ?? 0,
+    });
+  };
+
+  const closeEditDialog = () => {
+    setEditingLead(null);
+    setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
   };
 
   const getStatusColor = (status: string) => {
@@ -68,7 +95,7 @@ export function Leads() {
             <DialogHeader>
               <DialogTitle>Add New Lead</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input
@@ -94,7 +121,6 @@ export function Leads() {
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  required
                 />
               </div>
               <div>
@@ -149,6 +175,88 @@ export function Leads() {
         )}
       </div>
 
+      {/* Edit Lead dialog */}
+      <Dialog open={!!editingLead} onOpenChange={(open) => !open && closeEditDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Lead</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-company">Company</Label>
+              <Input
+                id="edit-company"
+                value={formData.company}
+                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-source">Source</Label>
+              <Input
+                id="edit-source"
+                value={formData.source}
+                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                placeholder="e.g., Website, Referral, Cold Call"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-value">Estimated Value ($)</Label>
+              <Input
+                id="edit-value"
+                type="number"
+                min="0"
+                value={formData.value}
+                onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-status">Status</Label>
+              <Select value={formData.status} onValueChange={(value: 'new' | 'contacted' | 'qualified' | 'lost' | 'converted') => setFormData({ ...formData, status: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                  <SelectItem value="converted">Converted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" className="w-full">Save Changes</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -201,8 +309,17 @@ export function Leads() {
                 <LastModified lastModifiedBy={lead.lastModifiedBy} lastModifiedAt={lead.lastModifiedAt} createdBy={lead.createdBy} createdAt={lead.createdAt} className="mt-2" />
               </div>
 
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
               {canEdit('leads') && (
+                <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEditDialog(lead)}
+                >
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
                 <Select
                   value={lead.status}
                   onValueChange={(value: any) => updateLead(lead.id, { status: value })}
@@ -218,6 +335,7 @@ export function Leads() {
                     <SelectItem value="converted">Converted</SelectItem>
                   </SelectContent>
                 </Select>
+                </>
               )}
               {canDelete('leads') && (
                 <Button

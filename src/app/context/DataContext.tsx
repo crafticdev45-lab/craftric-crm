@@ -3,6 +3,7 @@ import { Customer, Contact, Product, Model, Lead } from '../types';
 import { useAuth } from './AuthContext';
 import {
   isXanoEnabled,
+  isNeonApi,
   xanoList,
   xanoCreate,
   xanoUpdate,
@@ -385,32 +386,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const lead = leads.find((l) => l.id === id);
-      const alreadyConverted = customers.some((c) => c.leadId === id);
       const updated = await xanoUpdate<Lead>(XANO_ENDPOINTS.leads, id, updates, authToken);
       if (updated) setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
-      if (lead && updates.status === 'converted' && !alreadyConverted) {
-        const newCustomer = await xanoCreate<Customer>(
-          XANO_ENDPOINTS.customers,
-          { name: lead.company, status: 'active', leadId: lead.id } as Record<string, unknown>,
-          authToken
-        );
-        const cust = Array.isArray(newCustomer) ? newCustomer[0] : newCustomer;
-        if (cust && typeof cust === 'object' && cust.id) {
-          setCustomers((prev) => [...prev, cust as Customer]);
-          const newContact = await xanoCreate<Contact>(
-            XANO_ENDPOINTS.contacts,
-            { customerId: cust.id, name: lead.name, email: lead.email, phone: lead.phone, role: 'Primary Contact' } as Record<string, unknown>,
+      // Neon API creates account + contact server-side when status is set to 'converted'; refetch to get them
+      if (updates.status === 'converted' && isNeonApi()) {
+        await fetchAll();
+      }
+      // Xano (or other backends): create customer + contact on the client when converting
+      if (!isNeonApi()) {
+        const lead = leads.find((l) => l.id === id);
+        const alreadyConverted = customers.some((c) => c.leadId === id);
+        if (lead && updates.status === 'converted' && !alreadyConverted) {
+          const newCustomer = await xanoCreate<Customer>(
+            XANO_ENDPOINTS.customers,
+            { name: lead.company, status: 'active', leadId: lead.id } as Record<string, unknown>,
             authToken
           );
-          const c = Array.isArray(newContact) ? newContact[0] : newContact;
-          if (c && typeof c === 'object' && c.id) setContacts((prev) => [...prev, c as Contact]);
+          const cust = Array.isArray(newCustomer) ? newCustomer[0] : newCustomer;
+          if (cust && typeof cust === 'object' && cust.id) {
+            setCustomers((prev) => [...prev, cust as Customer]);
+            const newContact = await xanoCreate<Contact>(
+              XANO_ENDPOINTS.contacts,
+              { customerId: cust.id, name: lead.name, email: lead.email, phone: lead.phone ?? '', role: 'Primary Contact' } as Record<string, unknown>,
+              authToken
+            );
+            const c = Array.isArray(newContact) ? newContact[0] : newContact;
+            if (c && typeof c === 'object' && c.id) setContacts((prev) => [...prev, c as Contact]);
+          }
         }
       }
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to update lead');
     }
-  }, [authToken, leads, customers, currentUser?.id]);
+  }, [authToken, leads, customers, currentUser?.id, fetchAll]);
 
   const deleteLead = useCallback(async (id: string): Promise<boolean> => {
     const hasLinkedCustomer = customers.some((c) => c.leadId === id);

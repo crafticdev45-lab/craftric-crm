@@ -368,6 +368,27 @@ export const handler: Handler = async (event: HandlerEvent) => {
         WHERE id = ${id} RETURNING *
       `;
     } else if (table === 'leads') {
+      const newStatus = bodySnake.status as string | undefined;
+      if (newStatus === 'converted') {
+        const leadRows = await sql`SELECT id, name, email, phone, company FROM leads WHERE id = ${id} LIMIT 1`;
+        const leadRow = leadRows[0] as Record<string, unknown> | undefined;
+        const existingCustomer = await sql`SELECT id FROM customers WHERE lead_id = ${id} LIMIT 1`;
+        if (leadRow && existingCustomer.length === 0) {
+          const companyName = (leadRow.company as string) || (leadRow.name as string) || 'Unknown';
+          const insertedCustomer = await sql`
+            INSERT INTO customers (name, status, lead_id, last_modified_by)
+            VALUES (${companyName}, 'active', ${Number(id)}, ${auth.userId})
+            RETURNING id
+          `;
+          const newCustomerId = (insertedCustomer[0] as { id: number })?.id;
+          if (newCustomerId) {
+            await sql`
+              INSERT INTO contacts (customer_id, name, email, phone, role, last_modified_by)
+              VALUES (${newCustomerId}, ${(leadRow.name as string) || ''}, ${(leadRow.email as string) || ''}, ${(leadRow.phone as string) || ''}, 'Primary Contact', ${auth.userId})
+            `;
+          }
+        }
+      }
       updated = await sql`
         UPDATE leads SET
           name = COALESCE(${bodySnake.name as string ?? null}, name),
