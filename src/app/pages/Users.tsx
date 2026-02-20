@@ -31,12 +31,29 @@ export function Users() {
     name: '',
     email: '',
     role: 'sales' as 'admin' | 'sales' | 'manager',
+    password: '',
+    confirmPassword: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addUser(formData);
-    setFormData({ name: '', email: '', role: 'sales' });
+    if (formData.password !== formData.confirmPassword) {
+      window.alert('Passwords do not match.');
+      return;
+    }
+    const passwordToUse = formData.password.trim() || undefined;
+    await addUser({
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
+      ...(passwordToUse && { password: passwordToUse }),
+    });
+    if (passwordToUse) {
+      window.alert(`User created.\n\nEmail: ${formData.email}\nPassword: ${passwordToUse}\n\nShare this with the user securely. They can change it later via the reset password link.`);
+    } else {
+      window.alert(`User created.\n\nDefault password: changeme\nUse Edit → Send reset password link to let them set their own password.`);
+    }
+    setFormData({ name: '', email: '', role: 'sales', password: '', confirmPassword: '' });
     setIsDialogOpen(false);
   };
 
@@ -122,6 +139,28 @@ export function Users() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="password">Password (optional)</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Leave blank for default: changeme"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Only if setting a password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    autoComplete="new-password"
                   />
                 </div>
                 <div>

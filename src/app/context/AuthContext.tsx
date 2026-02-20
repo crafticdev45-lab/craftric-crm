@@ -37,7 +37,7 @@ interface AuthContextType {
   login: (email: string, password?: string) => boolean | Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   users: User[];
-  addUser: (user: Omit<User, 'id' | 'createdAt'>) => void;
+  addUser: (user: Omit<User, 'id' | 'createdAt'> & { password?: string }) => void;
   updateUser: (id: string, updates: Partial<Pick<User, 'name' | 'email'>>) => Promise<void>;
   deleteUser: (id: string) => void;
   requestPasswordReset: (email: string) => { success: boolean; error?: string };
@@ -219,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addUser = async (user: Omit<User, 'id' | 'createdAt'>) => {
+  const addUser = async (user: Omit<User, 'id' | 'createdAt'> & { password?: string }) => {
     if (!isXanoEnabled()) {
       const ts = new Date().toISOString();
       const newUser: User = {
@@ -230,13 +230,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastModifiedAt: ts,
       };
       setUsers((prev) => [...prev, newUser]);
-      // Default password for new users in mock mode
-      userPasswords[newUser.email] = 'welcome123';
+      userPasswords[newUser.email] = user.password ?? 'welcome123';
       return;
     }
     if (!token) return;
     try {
-      const created = await xanoCreate<User>(XANO_ENDPOINTS.users, user as Record<string, unknown>, token);
+      const payload: Record<string, unknown> = { name: user.name, email: user.email, role: user.role };
+      if (user.password != null && user.password !== '') payload.password = user.password;
+      const created = await xanoCreate<User>(XANO_ENDPOINTS.users, payload, token);
       if (created) setUsers((prev) => [...prev, created]);
     } catch (_) {}
   };
