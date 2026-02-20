@@ -113,7 +113,7 @@ export function Products() {
           const totalStock = models.reduce((sum, model) => sum + model.stock, 0);
           
           return (
-            <Link key={product.id} to={`/products/${product.id}`}>
+            <Link key={String(product.id)} to={`/products/${String(product.id)}`}>
               <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4 mb-4">

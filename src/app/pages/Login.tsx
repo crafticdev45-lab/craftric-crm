@@ -28,16 +28,18 @@ export function Login() {
     }
   }, [currentUser, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!email.trim() || !password) {
       setError('Please enter both email and password.');
       return;
     }
-    const success = login(email.trim(), password);
-    if (success === false) {
+    const result = await login(email.trim(), password);
+    if (result === false) {
       setError('Invalid email or password. Please try again.');
+    } else if (typeof result === 'object' && !result.success) {
+      setError(result.error ?? 'Login failed. Please try again.');
     }
   };
 

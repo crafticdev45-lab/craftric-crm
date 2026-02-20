@@ -1,12 +1,38 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { isXanoEnabled, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, XANO_ENDPOINTS } from '@/lib/xano';
+import { isXanoEnabled, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
 
 const TOKEN_KEY = 'craftric_auth_token';
 
+const ROLES = ['admin', 'sales', 'manager'] as const;
+type AppRole = (typeof ROLES)[number];
+
+/** Normalize user from Xano (or any API): ensure id is string and role is lowercase admin|sales|manager. */
+function normalizeUser(raw: unknown): User | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = o.id != null ? String(o.id) : undefined;
+  const name = typeof o.name === 'string' ? o.name : '';
+  const email = typeof o.email === 'string' ? o.email : '';
+  const createdAt = typeof o.created_at === 'string' ? o.created_at : (typeof o.createdAt === 'string' ? o.createdAt : new Date().toISOString().split('T')[0]);
+  let role = (o.role ?? o.user_type ?? o.role_id) as string | undefined;
+  if (typeof role !== 'string') role = 'sales';
+  const roleLower = String(role).toLowerCase();
+  const appRole: AppRole =
+    roleLower === 'admin' || roleLower === 'administrator'
+      ? 'admin'
+      : roleLower === 'manager'
+        ? 'manager'
+        : ROLES.includes(roleLower as AppRole)
+          ? (roleLower as AppRole)
+          : 'sales';
+  if (!id) return null;
+  return { id, name, email, role: appRole, createdAt };
+}
+
 interface AuthContextType {
   currentUser: User | null;
-  login: (email: string, password?: string) => boolean | void;
+  login: (email: string, password?: string) => boolean | Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   users: User[];
   addUser: (user: Omit<User, 'id' | 'createdAt'>) => void;
@@ -42,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (token) {
-      xanoMe<User>(token).then((user) => {
+      xanoMe<unknown>(token).then((raw) => {
+        const user = normalizeUser(raw);
         setCurrentUser(user);
         setIsLoading(false);
       }).catch(() => {
@@ -59,11 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isXanoEnabled() && token) {
-      xanoList<User>(XANO_ENDPOINTS.users, token).then(setUsers).catch(() => {});
+      xanoList<unknown>(XANO_ENDPOINTS.users, token)
+        .then((rawList) => rawList.map((raw) => normalizeUser(raw)).filter((u): u is User => u != null))
+        .then(setUsers)
+        .catch(() => {});
     }
   }, [token]);
 
-  const login = (email: string, password?: string): boolean | void => {
+  const login = (email: string, password?: string): boolean | Promise<{ success: boolean; error?: string }> => {
     if (!isXanoEnabled()) {
       const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
       if (!user) return false;
@@ -74,13 +104,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!password) return false;
     setIsLoading(true);
-    apiLogin(email, password).then((authToken) => {
-      if (authToken) {
-        localStorage.setItem(TOKEN_KEY, authToken);
-        setToken(authToken);
-      }
-      setIsLoading(false);
-    }).catch(() => setIsLoading(false));
+    return apiLogin(email, password)
+      .then((authToken) => {
+        if (authToken) {
+          localStorage.setItem(TOKEN_KEY, authToken);
+          setToken(authToken);
+          return { success: true };
+        }
+        return { success: false, error: 'Invalid email or password. Please try again.' };
+      })
+      .catch((err) => {
+        const message =
+          err instanceof RateLimitError
+            ? err.message
+            : 'Unable to sign in. Please check your connection and try again.';
+        return { success: false, error: message };
+      })
+      .finally(() => setIsLoading(false));
   };
 
   const logout = () => {

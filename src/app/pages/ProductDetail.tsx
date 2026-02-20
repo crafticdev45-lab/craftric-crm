@@ -23,7 +23,7 @@ export function ProductDetail() {
     price: 0,
   });
 
-  const product = products.find(p => p.id === id);
+  const product = products.find(p => String(p.id) === String(id));
   const models = getModelsByProduct(id || '');
 
   if (!product) {

@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:netlify": "netlify dev"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^0.10.0",
+    "jose": "^6.0.0",
     "@radix-ui/react-dialog": "1.1.6",
     "@radix-ui/react-label": "2.1.2",
     "@radix-ui/react-select": "2.1.6",
@@ -22,6 +25,7 @@
     "tailwind-merge": "3.2.0"
   },
   "devDependencies": {
+    "@netlify/functions": "^2.8.0",
     "@tailwindcss/vite": "4.1.12",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

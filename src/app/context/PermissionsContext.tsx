@@ -37,7 +37,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const [permissionsMap, setPermissionsMap] = useState<UserPermissionsMap>(loadPermissions);
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = (currentUser?.role ?? '').toLowerCase() === 'admin';
 
   const getUserPermissions = useCallback((userId: string, objectType: ObjectType): ObjectPermissions => {
     const userPerms = permissionsMap[userId];

@@ -8,6 +8,7 @@ import {
   xanoUpdate,
   xanoDelete,
   XANO_ENDPOINTS,
+  normalizeXanoRecord,
 } from '@/lib/xano';
 
 interface DataContextType {
@@ -80,30 +81,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const authToken = isXanoEnabled() ? token : null;
 
-  // Fetch from XANO when enabled
-  useEffect(() => {
-    if (!isXanoEnabled()) return;
-    // Some XANO setups allow unauthenticated read; try with token if available
+  const fetchAll = useCallback(() => {
+    if (!isXanoEnabled()) return Promise.resolve();
     const t = authToken ?? undefined;
     setIsLoading(true);
     setError(null);
-    Promise.all([
-      xanoList<Customer>(XANO_ENDPOINTS.customers, t),
-      xanoList<Contact>(XANO_ENDPOINTS.contacts, t),
-      xanoList<Product>(XANO_ENDPOINTS.products, t),
-      xanoList<Model>(XANO_ENDPOINTS.models, t),
-      xanoList<Lead>(XANO_ENDPOINTS.leads, t),
+    return Promise.all([
+      xanoList<unknown>(XANO_ENDPOINTS.customers, t),
+      xanoList<unknown>(XANO_ENDPOINTS.contacts, t),
+      xanoList<unknown>(XANO_ENDPOINTS.products, t),
+      xanoList<unknown>(XANO_ENDPOINTS.models, t),
+      xanoList<unknown>(XANO_ENDPOINTS.leads, t),
     ])
       .then(([c, ct, p, m, l]) => {
-        setCustomers(c.length ? c : initialCustomers);
-        setContacts(ct.length ? ct : initialContacts);
-        setProducts(p.length ? p : initialProducts);
-        setModels(m.length ? m : initialModels);
-        setLeads(l.length ? l : initialLeads);
+        setCustomers(
+          (c as unknown[]).length
+            ? (c as unknown[]).map((r) => normalizeXanoRecord<Customer>(r) as Customer)
+            : initialCustomers
+        );
+        setContacts(
+          (ct as unknown[]).length
+            ? (ct as unknown[]).map((r) => normalizeXanoRecord<Contact>(r) as Contact)
+            : initialContacts
+        );
+        setProducts(
+          (p as unknown[]).length
+            ? (p as unknown[]).map((r) => normalizeXanoRecord<Product>(r) as Product)
+            : initialProducts
+        );
+        setModels(
+          (m as unknown[]).length
+            ? (m as unknown[]).map((r) => normalizeXanoRecord<Model>(r) as Model)
+            : initialModels
+        );
+        setLeads(
+          (l as unknown[]).length
+            ? (l as unknown[]).map((r) => normalizeXanoRecord<Lead>(r) as Lead)
+            : initialLeads
+        );
       })
       .catch((err) => setError(err?.message ?? 'Failed to load data'))
       .finally(() => setIsLoading(false));
   }, [authToken]);
+
+  useEffect(() => {
+    if (!isXanoEnabled()) return;
+    fetchAll();
+  }, [fetchAll]);
 
   const addCustomer = useCallback(async (customer: Omit<Customer, 'id' | 'createdAt'>) => {
     if (!isXanoEnabled()) {
@@ -113,12 +137,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const created = await xanoCreate<Customer>(XANO_ENDPOINTS.customers, customer as Record<string, unknown>, authToken);
-      if (created) setCustomers((prev) => [...prev, created]);
+      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.customers, customer as Record<string, unknown>, authToken);
+      const created = raw ? (normalizeXanoRecord<Customer>(raw) as Customer) : null;
+      if (created?.id) setCustomers((prev) => [...prev, created]);
+      else await fetchAll();
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to add customer');
     }
-  }, [authToken, currentUser?.id]);
+  }, [authToken, currentUser?.id, fetchAll]);
 
   const updateCustomer = useCallback(async (id: string, updates: Partial<Customer>) => {
     if (!isXanoEnabled()) {
@@ -127,7 +153,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const updated = await xanoUpdate<Customer>(XANO_ENDPOINTS.customers, id, updates, authToken);
+      const raw = await xanoUpdate<unknown>(XANO_ENDPOINTS.customers, id, updates, authToken);
+      const updated = raw ? (normalizeXanoRecord<Customer>(raw) as Customer) : null;
       if (updated) setCustomers((prev) => prev.map((c) => (c.id === id ? updated : c)));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to update customer');
@@ -157,12 +184,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const created = await xanoCreate<Contact>(XANO_ENDPOINTS.contacts, contact as Record<string, unknown>, authToken);
-      if (created) setContacts((prev) => [...prev, created]);
+      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.contacts, contact as Record<string, unknown>, authToken);
+      const created = raw ? (normalizeXanoRecord<Contact>(raw) as Contact) : null;
+      if (created?.id && String(created.customerId) === String(contact.customerId)) {
+        setContacts((prev) => [...prev, created]);
+      } else {
+        await fetchAll();
+      }
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to add contact');
     }
-  }, [authToken]);
+  }, [authToken, fetchAll]);
 
   const updateContact = useCallback(async (id: string, updates: Partial<Contact>) => {
     if (!isXanoEnabled()) {
@@ -171,7 +203,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const updated = await xanoUpdate<Contact>(XANO_ENDPOINTS.contacts, id, updates, authToken);
+      const raw = await xanoUpdate<unknown>(XANO_ENDPOINTS.contacts, id, updates, authToken);
+      const updated = raw ? (normalizeXanoRecord<Contact>(raw) as Contact) : null;
       if (updated) setContacts((prev) => prev.map((c) => (c.id === id ? updated : c)));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to update contact');
@@ -203,12 +236,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const created = await xanoCreate<Product>(XANO_ENDPOINTS.products, product as Record<string, unknown>, authToken);
-      if (created) setProducts((prev) => [...prev, created]);
+      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.products, product as Record<string, unknown>, authToken);
+      const created = raw ? (normalizeXanoRecord<Product>(raw) as Product) : null;
+      if (created?.id) setProducts((prev) => [...prev, created]);
+      else await fetchAll();
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to add product');
     }
-  }, [authToken]);
+  }, [authToken, fetchAll]);
 
   const updateProduct = useCallback(async (id: string, updates: Partial<Product>) => {
     if (!isXanoEnabled()) {
@@ -217,7 +252,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const updated = await xanoUpdate<Product>(XANO_ENDPOINTS.products, id, updates, authToken);
+      const raw = await xanoUpdate<unknown>(XANO_ENDPOINTS.products, id, updates, authToken);
+      const updated = raw ? (normalizeXanoRecord<Product>(raw) as Product) : null;
       if (updated) setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to update product');
@@ -225,19 +261,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [authToken]);
 
   const deleteProduct = useCallback(async (id: string) => {
+    const idStr = String(id);
     if (!isXanoEnabled()) {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      setModels((prev) => prev.filter((m) => m.productId !== id));
+      setProducts((prev) => prev.filter((p) => String(p.id) !== idStr));
+      setModels((prev) => prev.filter((m) => String(m.productId) !== idStr));
       return;
     }
     try {
-      await xanoDelete(XANO_ENDPOINTS.products, id, authToken);
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      setModels((prev) => prev.filter((m) => m.productId !== id));
+      await xanoDelete(XANO_ENDPOINTS.products, idStr, authToken);
+      setProducts((prev) => prev.filter((p) => String(p.id) !== idStr));
+      setModels((prev) => prev.filter((m) => String(m.productId) !== idStr));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to delete product');
     }
-  }, [authToken, currentUser?.id]);
+  }, [authToken]);
 
   const addModel = useCallback(async (model: Omit<Model, 'id'>) => {
     if (!isXanoEnabled()) {
@@ -247,42 +284,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const created = await xanoCreate<Model>(XANO_ENDPOINTS.models, model as Record<string, unknown>, authToken);
-      if (created) setModels((prev) => [...prev, created]);
+      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.models, model as Record<string, unknown>, authToken);
+      const created = raw ? (normalizeXanoRecord<Model>(raw) as Model) : null;
+      if (created?.id) setModels((prev) => [...prev, created]);
+      else await fetchAll();
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to add model');
     }
-  }, [authToken]);
+  }, [authToken, fetchAll]);
 
   const updateModel = useCallback(async (id: string, updates: Partial<Model>) => {
+    const idStr = String(id);
     if (!isXanoEnabled()) {
       const ts = now();
-      setModels((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates, lastModifiedBy: currentUser?.id, lastModifiedAt: ts } : m)));
+      setModels((prev) => prev.map((m) => (String(m.id) === idStr ? { ...m, ...updates, lastModifiedBy: currentUser?.id, lastModifiedAt: ts } : m)));
       return;
     }
     try {
-      const updated = await xanoUpdate<Model>(XANO_ENDPOINTS.models, id, updates, authToken);
-      if (updated) setModels((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      const raw = await xanoUpdate<unknown>(XANO_ENDPOINTS.models, idStr, updates, authToken);
+      const updated = raw ? (normalizeXanoRecord<Model>(raw) as Model) : null;
+      if (updated) setModels((prev) => prev.map((m) => (String(m.id) === idStr ? updated : m)));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to update model');
     }
   }, [authToken]);
 
   const deleteModel = useCallback(async (id: string) => {
+    const idStr = String(id);
     if (!isXanoEnabled()) {
-      setModels((prev) => prev.filter((m) => m.id !== id));
+      setModels((prev) => prev.filter((m) => String(m.id) !== idStr));
       return;
     }
     try {
-      await xanoDelete(XANO_ENDPOINTS.models, id, authToken);
-      setModels((prev) => prev.filter((m) => m.id !== id));
+      await xanoDelete(XANO_ENDPOINTS.models, idStr, authToken);
+      setModels((prev) => prev.filter((m) => String(m.id) !== idStr));
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to delete model');
     }
   }, [authToken]);
 
   const getModelsByProduct = useCallback((productId: string) => {
-    return models.filter((m) => m.productId === productId);
+    const pid = String(productId);
+    return models.filter((m) => String(m.productId) === pid);
   }, [models]);
 
   const addLead = useCallback(async (lead: Omit<Lead, 'id' | 'createdAt' | 'createdBy'>) => {
