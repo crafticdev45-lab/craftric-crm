@@ -143,7 +143,7 @@ export function Leads() {
                 />
               </div>
               <div>
-                <Label htmlFor="value">Estimated Value ($)</Label>
+                <Label htmlFor="value">Estimated Value (₹)</Label>
                 <Input
                   id="value"
                   type="number"
@@ -228,7 +228,7 @@ export function Leads() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-value">Estimated Value ($)</Label>
+              <Label htmlFor="edit-value">Estimated Value (₹)</Label>
               <Input
                 id="edit-value"
                 type="number"
@@ -300,7 +300,7 @@ export function Leads() {
               <div className="pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Value</span>
-                  <span className="font-bold text-gray-900">${lead.value.toLocaleString()}</span>
+                  <span className="font-bold text-gray-900">₹{(Number(lead.value) || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Source</span>

@@ -129,7 +129,7 @@ export function CustomerDetail() {
                 </Select>
                 {linkedLead && (
                   <p className="text-sm text-gray-500 mt-2">
-                    {linkedLead.name}, {linkedLead.company} • ${linkedLead.value.toLocaleString()}
+                    {linkedLead.name}, {linkedLead.company} • ₹{(Number(linkedLead.value) || 0).toLocaleString()}
                   </p>
                 )}
               </div>

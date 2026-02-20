@@ -6,7 +6,7 @@ import { LastModified } from '../components/LastModified';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { ArrowLeft, Plus, Package, Trash2, DollarSign } from 'lucide-react';
+import { ArrowLeft, Plus, Package, Trash2, IndianRupee } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 
@@ -127,7 +127,7 @@ export function ProductDetail() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Inventory Value</p>
-                <p className="text-2xl font-bold text-gray-900">${totalValue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">₹{totalValue.toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -181,7 +181,7 @@ export function ProductDetail() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="price">Price ($)</Label>
+                    <Label htmlFor="price">Price (₹)</Label>
                     <Input
                       id="price"
                       type="number"
@@ -261,7 +261,7 @@ export function ProductDetail() {
                     <div>
                       <Label htmlFor={`price-${model.id}`} className="text-xs text-gray-600 mb-1">Price</Label>
                       <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
                           id={`price-${model.id}`}
                           type="number"
@@ -280,7 +280,7 @@ export function ProductDetail() {
                     <LastModified lastModifiedBy={model.lastModifiedBy} lastModifiedAt={model.lastModifiedAt} />
                     <div className="flex items-center justify-between text-sm mt-2">
                       <span className="text-gray-600">Total Value:</span>
-                      <span className="font-bold text-gray-900">${(model.stock * model.price).toFixed(2)}</span>
+                      <span className="font-bold text-gray-900">₹{(model.stock * model.price).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>

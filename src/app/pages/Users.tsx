@@ -195,7 +195,7 @@ export function Users() {
                   createdAt={user.createdAt}
                   className="pt-3 border-t border-gray-200"
                 />
-                {canManagePermissions() && user.role !== 'admin' && (
+                {canManagePermissions() && (
                   <div className="pt-3">
                     <PermissionsDialog user={user} getUserPermissions={getUserPermissions} updateUserPermissions={updateUserPermissions} />
                   </div>
@@ -262,12 +262,13 @@ function PermissionsDialog({
   getUserPermissions,
   updateUserPermissions,
 }: {
-  user: { id: string; name: string };
+  user: { id: string; name: string; role: string };
   getUserPermissions: (userId: string, ot: ObjectType) => { read: boolean; edit: boolean; delete: boolean };
   updateUserPermissions: (userId: string, ot: ObjectType, p: Partial<{ read: boolean; edit: boolean; delete: boolean }>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const objectTypes: ObjectType[] = ['customers', 'contacts', 'products', 'models', 'leads', 'users'];
+  const isAdminUser = (user.role ?? '').toLowerCase() === 'admin';
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -281,9 +282,13 @@ function PermissionsDialog({
         <DialogHeader>
           <DialogTitle>Permissions for {user.name}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-gray-600 mb-4">Set read, edit, and delete access for each object type.</p>
-        <div className="space-y-4">
-          {objectTypes.map((ot) => {
+        {isAdminUser ? (
+          <p className="text-sm text-gray-600">Admin users have full access to all resources.</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 mb-4">Set read, edit, and delete access for each object type.</p>
+            <div className="space-y-4">
+              {objectTypes.map((ot) => {
             const perms = getUserPermissions(user.id, ot);
             return (
               <div key={ot} className="flex items-center gap-6 p-3 border rounded-lg">
@@ -320,7 +325,9 @@ function PermissionsDialog({
               </div>
             );
           })}
-        </div>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

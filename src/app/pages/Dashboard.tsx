@@ -29,7 +29,7 @@ export function Dashboard() {
     },
     {
       title: 'Pipeline Value',
-      value: `$${leads.reduce((sum, l) => sum + (Number(l.value) || 0), 0).toLocaleString()}`,
+      value: `₹${leads.reduce((sum, l) => sum + (Number(l.value) || 0), 0).toLocaleString()}`,
       icon: TrendingUp,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
@@ -102,7 +102,7 @@ export function Dashboard() {
                     <p className="text-sm text-gray-600">{lead.company}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gray-900">${(Number(lead.value) || 0).toLocaleString()}</p>
+                    <p className="font-medium text-gray-900">₹{(Number(lead.value) || 0).toLocaleString()}</p>
                     <span className={`text-xs ${
                       lead.status === 'new' ? 'text-blue-600' :
                       lead.status === 'contacted' ? 'text-purple-600' :
