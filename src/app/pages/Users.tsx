@@ -148,17 +148,17 @@ export function Users() {
         {users.map((user) => (
           <Card key={user.id}>
             <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-blue-50 rounded-full">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="p-3 bg-blue-50 rounded-full flex-shrink-0">
                     <UserIcon className="w-6 h-6 text-blue-600" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">{user.name}</h3>
-                    <p className="text-sm text-gray-600">{user.email}</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-lg text-gray-900 truncate" title={user.name}>{user.name}</h3>
+                    <p className="text-sm text-gray-600 truncate" title={user.email}>{user.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   {canEdit('users') && (
                     <Button
                       variant="ghost"

@@ -89,6 +89,45 @@ async function signToken(userId: string): Promise<string> {
     .sign(secret);
 }
 
+const RESET_TOKEN_EXPIRY = '1h';
+
+async function signResetToken(userId: string): Promise<string> {
+  const secret = new TextEncoder().encode(JWT_SECRET);
+  return new jose.SignJWT({ purpose: 'password-reset' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setExpirationTime(RESET_TOKEN_EXPIRY)
+    .sign(secret);
+}
+
+async function verifyResetToken(token: string): Promise<string | null> {
+  try {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const { payload } = await jose.jwtVerify(token, secret);
+    if ((payload as { purpose?: string }).purpose !== 'password-reset') return null;
+    const sub = payload.sub;
+    return sub ? String(sub) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendEmailViaResend(to: string, subject: string, html: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY is not set. Add it in Netlify Environment variables to send password reset emails.');
+  const from = process.env.RESEND_FROM || 'Craftric CRM <onboarding@resend.dev>';
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { message?: string };
+  if (!res.ok) throw new Error(data.message || `Resend API error: ${res.status}`);
+}
+
 export const handler: Handler = async (event: HandlerEvent) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' }, body: '' };
@@ -168,8 +207,37 @@ export const handler: Handler = async (event: HandlerEvent) => {
       if (!email) return err('Email required');
       const rows = await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
       if (rows.length === 0) return err('No user found with this email', 404);
-      // TODO: generate reset token, store it, and send email via your provider (SendGrid, Resend, etc.)
-      return json({ success: true, message: 'If an account exists, a reset link has been sent.' });
+      const userId = String((rows[0] as { id: number }).id);
+      const resetToken = await signResetToken(userId);
+      const siteUrl = (process.env.URL || process.env.SITE_URL || 'https://app.example.com').replace(/\/$/, '');
+      const resetLink = `${siteUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+      const subject = 'Reset your password – Craftric CRM';
+      const html = `
+        <p>You requested a password reset for your Craftric CRM account.</p>
+        <p><a href="${resetLink}" style="color:#2563eb;">Reset password</a></p>
+        <p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>
+      `;
+      try {
+        await sendEmailViaResend(email, subject, html);
+        return json({ success: true, message: 'If an account exists, a reset link has been sent.' });
+      } catch (e) {
+        return err((e as Error).message, 500);
+      }
+    }
+
+    if (path === '/auth/reset-password' && method === 'POST') {
+      const token = (body.token as string)?.trim?.();
+      const newPassword = body.newPassword as string;
+      if (!token || !newPassword || typeof newPassword !== 'string') return err('Token and new password required');
+      const userId = await verifyResetToken(token);
+      if (!userId) return err('Invalid or expired reset link. Request a new one.', 400);
+      const salt = crypto.randomUUID().replace(/-/g, '');
+      const hash = await hashPassword(newPassword, salt);
+      await sql`
+        UPDATE users SET password_salt = ${salt}, password_hash = ${hash}, last_modified_at = NOW()
+        WHERE id = ${userId}
+      `;
+      return json({ success: true, message: 'Password has been reset.' });
     }
 
     return err('Not found', 404);
