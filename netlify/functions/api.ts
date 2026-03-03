@@ -18,6 +18,7 @@ const CAMEL: Record<string, string> = {
   customer_id: 'customerId',
   product_id: 'productId',
   created_by: 'createdBy',
+  user_id: 'userId',
 };
 
 function rowToCamel(row: Record<string, unknown>, omitKeys: string[] = []): Record<string, unknown> {
@@ -256,6 +257,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     models: 'models',
     leads: 'leads',
     users: 'users',
+    permissions: 'permissions',
   };
   const table = tableMap[resource];
   if (!table) return err('Not found', 404);
@@ -269,6 +271,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     else if (table === 'models') rows = await sql`SELECT * FROM models ORDER BY id DESC`;
     else if (table === 'leads') rows = await sql`SELECT * FROM leads ORDER BY created_at DESC`;
     else if (table === 'users') rows = await sql`SELECT id, name, email, role, created_at, last_modified_by, last_modified_at FROM users ORDER BY created_at DESC`;
+    else if (table === 'permissions') rows = await sql`SELECT id, user_id, object_type, can_read, can_edit, can_delete FROM permissions ORDER BY id`;
     const list = (rows || []).map((r) => rowToCamel(r as Record<string, unknown>, ['password_hash', 'password_salt']));
     return json(list);
   }
@@ -378,6 +381,25 @@ export const handler: Handler = async (event: HandlerEvent) => {
         INSERT INTO users (name, email, password_salt, password_hash, role, last_modified_by)
         VALUES (${name}, ${email}, ${salt}, ${hash}, ${role}, ${auth.userId})
         RETURNING id, name, email, role, created_at
+      `;
+      return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+    }
+    if (table === 'permissions') {
+      const userId = (body.userId as string) || String(auth.userId);
+      const objectType = (body.objectType as string) || '';
+      const canRead = Boolean(body.read);
+      const canEdit = Boolean(body.edit);
+      const canDelete = Boolean(body.delete);
+      if (!objectType) return err('objectType is required');
+      const inserted = await sql`
+        INSERT INTO permissions (user_id, object_type, can_read, can_edit, can_delete)
+        VALUES (${Number(userId)}, ${objectType}, ${canRead}, ${canEdit}, ${canDelete})
+        ON CONFLICT (user_id, object_type)
+        DO UPDATE SET
+          can_read = EXCLUDED.can_read,
+          can_edit = EXCLUDED.can_edit,
+          can_delete = EXCLUDED.can_delete
+        RETURNING id, user_id, object_type, can_read, can_edit, can_delete
       `;
       return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
     }

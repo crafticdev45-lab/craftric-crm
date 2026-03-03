@@ -1,10 +1,19 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { ObjectType, ObjectPermissions } from '../types';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'craftric_user_permissions';
 
 type UserPermissionsMap = Record<string, Record<ObjectType, ObjectPermissions>>;
+
+interface PermissionRow {
+  id?: string;
+  userId: string;
+  objectType: ObjectType;
+  read: boolean;
+  edit: boolean;
+  delete: boolean;
+}
 
 const defaultPermissions: ObjectPermissions = { read: true, edit: false, delete: false };
 
@@ -34,8 +43,10 @@ interface PermissionsContextType {
 const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
   const [permissionsMap, setPermissionsMap] = useState<UserPermissionsMap>(loadPermissions);
+
+  const NEON_API_URL = (import.meta as any).env.VITE_API_URL ?? '';
 
   const isAdmin = (currentUser?.role ?? '').toLowerCase() === 'admin';
 
@@ -46,17 +57,77 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return objPerms ? { ...defaultPermissions, ...objPerms } : defaultPermissions;
   }, [permissionsMap]);
 
+  // When using the Neon API backend, load all permissions from the server and
+  // build the in-memory permissions map so permissions persist across browsers.
+  useEffect(() => {
+    if (!NEON_API_URL) return;
+    if (!token) return;
+    const base = NEON_API_URL.replace(/\/$/, '');
+    fetch(`${base}/permissions`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const rows = (await res.json()) as PermissionRow[];
+        const next: UserPermissionsMap = {};
+        for (const row of rows) {
+          const key = String(row.userId);
+          const ot = row.objectType;
+          if (!next[key]) {
+            next[key] = {} as Record<ObjectType, ObjectPermissions>;
+          }
+          next[key][ot] = {
+            read: !!row.read,
+            edit: !!row.edit,
+            delete: !!row.delete,
+          };
+        }
+        setPermissionsMap(next);
+      })
+      .catch(() => {
+        // On error, fall back to any locally stored permissions.
+      });
+  }, [NEON_API_URL, token]);
+
   const updateUserPermissions = useCallback((userId: string, objectType: ObjectType, perms: Partial<ObjectPermissions>) => {
     if (!isAdmin) return;
     const key = String(userId);
     setPermissionsMap((prev) => {
       const next = { ...prev };
-      next[key] = { ...next[key] } as Record<ObjectType, ObjectPermissions>;
-      next[key][objectType] = { ...defaultPermissions, ...next[key][objectType], ...perms };
+      const userPerms = (next[key] ?? {}) as Record<ObjectType, ObjectPermissions>;
+      const existing = userPerms[objectType] ?? defaultPermissions;
+      const merged: ObjectPermissions = { ...existing, ...perms };
+      next[key] = { ...userPerms, [objectType]: merged } as Record<ObjectType, ObjectPermissions>;
       savePermissions(next);
+
+      // Persist to Neon API backend (when configured) so permissions are shared across devices.
+      if (NEON_API_URL && token) {
+        const base = NEON_API_URL.replace(/\/$/, '');
+        fetch(`${base}/permissions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: key,
+            objectType,
+            read: merged.read,
+            edit: merged.edit,
+            delete: merged.delete,
+          }),
+        }).catch(() => {
+          // Ignore errors here; UI will still reflect local state.
+        });
+      }
+
       return next;
     });
-  }, [isAdmin]);
+  }, [NEON_API_URL, isAdmin, token]);
 
   const canRead = useCallback((objectType: ObjectType) => {
     if (!currentUser) return false;

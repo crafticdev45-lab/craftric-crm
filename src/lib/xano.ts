@@ -231,4 +231,5 @@ export const XANO_ENDPOINTS = {
   models: '/models',
   leads: '/leads',
   users: '/users',
+  permissions: '/permissions',
 } as const;
