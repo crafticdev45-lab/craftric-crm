@@ -11,6 +11,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
+const COUNTRY_CODES = [
+  { code: '+91', label: 'India (+91)' },
+  { code: '+1', label: 'USA/Canada (+1)' },
+  { code: '+44', label: 'United Kingdom (+44)' },
+  { code: '+61', label: 'Australia (+61)' },
+  { code: '+65', label: 'Singapore (+65)' },
+  { code: '+971', label: 'UAE (+971)' },
+  { code: '+49', label: 'Germany (+49)' },
+  { code: '+33', label: 'France (+33)' },
+  { code: '+81', label: 'Japan (+81)' },
+  { code: '+86', label: 'China (+86)' },
+] as const;
+
 export function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -23,6 +36,7 @@ export function CustomerDetail() {
     phone: '',
     role: '',
   });
+  const [contactPhoneCode, setContactPhoneCode] = useState<string>(COUNTRY_CODES[0].code);
 
   const customer = customers.find(c => c.id === id);
   const contacts = getContactsByCustomer(id || '');
@@ -42,8 +56,9 @@ export function CustomerDetail() {
 
   const handleContactSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addContact({ ...formData, customerId: customer.id });
+    addContact({ ...formData, phone: `${contactPhoneCode}${formData.phone}`, customerId: customer.id });
     setFormData({ name: '', email: '', phone: '', role: '' });
+    setContactPhoneCode(COUNTRY_CODES[0].code);
     setIsDialogOpen(false);
   };
 
@@ -197,12 +212,32 @@ export function CustomerDetail() {
                   </div>
                   <div>
                     <Label htmlFor="contact-phone">Phone</Label>
-                    <Input
-                      id="contact-phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <Select value={contactPhoneCode} onValueChange={(v) => setContactPhoneCode(v)}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COUNTRY_CODES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="contact-phone"
+                        value={formData.phone}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={10}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setFormData({ ...formData, phone: digits });
+                        }}
+                        required
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor="contact-role">Role</Label>

@@ -55,6 +55,10 @@ export function ProductDetail() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.price <= 0) {
+      window.alert('Price must be greater than zero.');
+      return;
+    }
     addModel({ ...formData, productId: product.id });
     setFormData({ name: '', sku: '', stock: 0, price: 0 });
     setIsDialogOpen(false);
@@ -200,10 +204,13 @@ export function ProductDetail() {
                     <Input
                       id="price"
                       type="number"
-                      min="0"
+                      min="1"
                       step="0.01"
                       value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setFormData({ ...formData, price: Number.isNaN(val) ? 0 : val });
+                      }}
                       required
                     />
                   </div>

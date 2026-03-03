@@ -10,6 +10,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
+const COUNTRY_CODES = [
+  { code: '+91', label: 'India (+91)' },
+  { code: '+1', label: 'USA/Canada (+1)' },
+  { code: '+44', label: 'United Kingdom (+44)' },
+  { code: '+61', label: 'Australia (+61)' },
+  { code: '+65', label: 'Singapore (+65)' },
+  { code: '+971', label: 'UAE (+971)' },
+  { code: '+49', label: 'Germany (+49)' },
+  { code: '+33', label: 'France (+33)' },
+  { code: '+81', label: 'Japan (+81)' },
+  { code: '+86', label: 'China (+86)' },
+] as const;
+
 export function Leads() {
   const { leads, addLead, updateLead, deleteLead } = useData();
   const { canAdd, canEdit, canDelete } = usePermissions();
@@ -25,6 +38,7 @@ export function Leads() {
     source: '',
     value: 0,
   });
+  const [leadPhoneCode, setLeadPhoneCode] = useState<string>(COUNTRY_CODES[0].code);
 
   const filteredLeads = leads.filter(lead =>
     (lead.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -34,8 +48,9 @@ export function Leads() {
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addLead(formData);
+    addLead({ ...formData, phone: `${leadPhoneCode}${formData.phone}` });
     setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
+    setLeadPhoneCode(COUNTRY_CODES[0].code);
     setIsDialogOpen(false);
   };
 
@@ -117,12 +132,32 @@ export function Leads() {
               </div>
               <div>
                 <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  required
-                />
+                <div className="flex gap-2">
+                  <Select value={leadPhoneCode} onValueChange={(v) => setLeadPhoneCode(v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRY_CODES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone: digits });
+                    }}
+                    required
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="company">Company</Label>
@@ -148,9 +183,12 @@ export function Leads() {
                 <Input
                   id="value"
                   type="number"
-                  min="0"
+                  min="1"
                   value={formData.value}
-                  onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setFormData({ ...formData, value: Number.isNaN(val) ? 0 : val });
+                  }}
                   required
                 />
               </div>
@@ -207,7 +245,13 @@ export function Leads() {
               <Input
                 id="edit-phone"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={10}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setFormData({ ...formData, phone: digits });
+                }}
                 required
               />
             </div>
@@ -234,9 +278,12 @@ export function Leads() {
               <Input
                 id="edit-value"
                 type="number"
-                min="0"
+                min="1"
                 value={formData.value}
-                onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setFormData({ ...formData, value: Number.isNaN(val) ? 0 : val });
+                }}
               />
             </div>
             <div>
