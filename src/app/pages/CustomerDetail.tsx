@@ -201,6 +201,7 @@ export function CustomerDetail() {
                       id="contact-phone"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      required
                     />
                   </div>
                   <div>
@@ -209,6 +210,7 @@ export function CustomerDetail() {
                       id="contact-role"
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      required
                     />
                   </div>
                   <Button type="submit" className="w-full">Add Contact</Button>

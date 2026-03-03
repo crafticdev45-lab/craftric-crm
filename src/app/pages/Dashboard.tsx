@@ -7,7 +7,7 @@ export function Dashboard() {
 
   const stats = [
     {
-      title: 'Total Customers',
+      title: 'Total Companies',
       value: customers.length,
       icon: Users,
       color: 'text-blue-600',

@@ -114,9 +114,9 @@ function ResetPasswordDialog() {
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [open, setOpen] = useState(false);
-  const { requestPasswordReset } = useAuth();
+  const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('idle');
     setMessage('');
@@ -125,14 +125,29 @@ function ResetPasswordDialog() {
       setMessage('Please enter your email.');
       return;
     }
-    const result = requestPasswordReset(email.trim());
-    if (result.success) {
-      setStatus('success');
-      setMessage('Your current password has been sent to your email address.');
-      setEmail('');
-    } else {
+    if (!API_URL) {
       setStatus('error');
-      setMessage(result.error ?? 'Email does not exist.');
+      setMessage('App is not configured for password reset.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/auth/send-reset-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        setStatus('error');
+        setMessage(data.error ?? 'Failed to send reset link.');
+        return;
+      }
+      setStatus('success');
+      setMessage(data.message ?? 'If this email exists in our system, a reset link has been sent.');
+      setEmail('');
+    } catch {
+      setStatus('error');
+      setMessage('Failed to send reset link. Please try again.');
     }
   };
 

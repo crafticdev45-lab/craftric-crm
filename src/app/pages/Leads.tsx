@@ -121,6 +121,7 @@ export function Leads() {
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  required
                 />
               </div>
               <div>
@@ -207,6 +208,7 @@ export function Leads() {
                 id="edit-phone"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                required
               />
             </div>
             <div>
