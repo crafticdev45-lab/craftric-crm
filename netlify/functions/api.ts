@@ -19,6 +19,10 @@ const CAMEL: Record<string, string> = {
   product_id: 'productId',
   created_by: 'createdBy',
   user_id: 'userId',
+  object_type: 'objectType',
+  can_read: 'read',
+  can_edit: 'edit',
+  can_delete: 'delete',
 };
 
 function rowToCamel(row: Record<string, unknown>, omitKeys: string[] = []): Record<string, unknown> {
