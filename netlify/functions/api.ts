@@ -52,6 +52,16 @@ function err(message: string, status = 400) {
   return json({ error: message }, status);
 }
 
+function isValidEmailFormat(email: string): boolean {
+  const s = email.trim();
+  if (!s) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function isPgUniqueViolation(e: unknown): boolean {
+  return e != null && typeof e === 'object' && 'code' in e && (e as { code: string }).code === '23505';
+}
+
 async function hashPassword(password: string, salt: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
@@ -165,6 +175,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
       const email = (body.email as string)?.trim?.();
       const password = body.password as string;
       if (!email || !password) return err('Email and password required');
+      if (!isValidEmailFormat(email)) return err('Enter a valid email address');
       const rows = await sql`SELECT id, name, email, role, created_at, password_salt, password_hash FROM users WHERE email = ${email} LIMIT 1`;
       const user = rows[0] as Record<string, unknown> | undefined;
       if (!user) return err('Invalid email or password', 401);
@@ -180,6 +191,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
       const password = body.password as string;
       const role = ((body.role as string) || 'sales') as string;
       if (!name || !email || !password) return err('Name, email and password required');
+      if (!isValidEmailFormat(email)) return err('Enter a valid email address');
       const salt = crypto.randomUUID().replace(/-/g, '');
       const hash = await hashPassword(password, salt);
       try {
@@ -208,6 +220,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     if (path === '/auth/send-reset-link' && method === 'POST') {
       const email = (body.email as string)?.trim?.();
       if (!email) return err('Email required');
+      if (!isValidEmailFormat(email)) return err('Enter a valid email address');
       const rows = await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
       if (rows.length === 0) return err('No user found with this email', 404);
       const userId = String((rows[0] as { id: number }).id);
@@ -322,7 +335,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
     if (table === 'contacts') {
       const customer_id = Number(snake.customer_id);
       const name = snake.name as string;
-      const email = snake.email as string;
+      const email = String(snake.email ?? '').trim();
+      if (!isValidEmailFormat(email)) return err('Enter a valid email address');
       const phone = (snake.phone as string) || '';
       const role = (snake.role as string) || '';
       const inserted = await sql`
@@ -333,48 +347,83 @@ export const handler: Handler = async (event: HandlerEvent) => {
       return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
     }
     if (table === 'products') {
-      const name = snake.name as string;
-      const description = (snake.description as string) || '';
-      const category = (snake.category as string) || '';
-      const inserted = await sql`
-        INSERT INTO products (name, description, category, last_modified_by)
-        VALUES (${name}, ${description}, ${category}, ${auth.userId})
-        RETURNING *
+      const name = String(snake.name ?? '').trim();
+      const description = String(snake.description ?? '').trim();
+      const category = String(snake.category ?? '').trim();
+      if (!name) return err('Product name is required');
+      const dup = await sql`
+        SELECT id FROM products WHERE lower(trim(name)) = ${name.toLowerCase()} LIMIT 1
       `;
-      return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      if (dup.length) return err('A product with this name already exists', 409);
+      try {
+        const inserted = await sql`
+          INSERT INTO products (name, description, category, last_modified_by)
+          VALUES (${name}, ${description}, ${category}, ${auth.userId})
+          RETURNING *
+        `;
+        return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A product with this name already exists', 409);
+        throw e;
+      }
     }
     if (table === 'models') {
       const product_id = Number(snake.product_id);
-      const name = snake.name as string;
-      const sku = snake.sku as string;
+      const name = String(snake.name ?? '').trim();
+      const sku = String(snake.sku ?? '').trim();
       const stock = Number(snake.stock) || 0;
       const price = Number(snake.price) || 0;
-      const inserted = await sql`
-        INSERT INTO models (product_id, name, sku, stock, price, last_modified_by)
-        VALUES (${product_id}, ${name}, ${sku}, ${stock}, ${price}, ${auth.userId})
-        RETURNING *
+      if (!name) return err('Model name is required');
+      if (!sku) return err('SKU is required');
+      const dupSku = await sql`
+        SELECT id FROM models WHERE lower(trim(sku)) = ${sku.toLowerCase()} LIMIT 1
       `;
-      return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      if (dupSku.length) return err('A model with this SKU already exists', 409);
+      try {
+        const inserted = await sql`
+          INSERT INTO models (product_id, name, sku, stock, price, last_modified_by)
+          VALUES (${product_id}, ${name}, ${sku}, ${stock}, ${price}, ${auth.userId})
+          RETURNING *
+        `;
+        return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A model with this SKU already exists', 409);
+        throw e;
+      }
     }
     if (table === 'leads') {
-      const name = snake.name as string;
-      const email = snake.email as string;
+      const name = String(snake.name ?? '').trim();
+      const emailRaw = String(snake.email ?? '').trim();
       const phone = (snake.phone as string) || '';
-      const company = snake.company as string;
+      const company = String(snake.company ?? '').trim();
       const status = (snake.status as string) || 'new';
       const source = (snake.source as string) || '';
       const value = Number(snake.value) || 0;
       const created_by = auth.userId;
-      const inserted = await sql`
-        INSERT INTO leads (name, email, phone, company, status, source, value, created_by, last_modified_by)
-        VALUES (${name}, ${email}, ${phone}, ${company}, ${status}, ${source}, ${value}, ${created_by}, ${auth.userId})
-        RETURNING *
+      if (!name) return err('Name is required');
+      if (!emailRaw) return err('Email is required');
+      if (!isValidEmailFormat(emailRaw)) return err('Enter a valid email address');
+      if (!company) return err('Company is required');
+      const dupEmail = await sql`
+        SELECT id FROM leads WHERE lower(trim(email)) = ${emailRaw.toLowerCase()} LIMIT 1
       `;
-      return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      if (dupEmail.length) return err('A lead with this email already exists', 409);
+      try {
+        const inserted = await sql`
+          INSERT INTO leads (name, email, phone, company, status, source, value, created_by, last_modified_by)
+          VALUES (${name}, ${emailRaw}, ${phone}, ${company}, ${status}, ${source}, ${value}, ${created_by}, ${auth.userId})
+          RETURNING *
+        `;
+        return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A lead with this email already exists', 409);
+        throw e;
+      }
     }
     if (table === 'users') {
       const name = snake.name as string;
-      const email = snake.email as string;
+      const email = String(snake.email ?? '').trim();
+      if (!isValidEmailFormat(email)) return err('Enter a valid email address');
       const role = (snake.role as string) || 'sales';
       const password = (body.password as string) || 'changeme';
       const salt = crypto.randomUUID().replace(/-/g, '');
@@ -439,10 +488,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
         WHERE id = ${id} RETURNING *
       `;
     } else if (table === 'contacts') {
+      if (bodySnake.email != null) {
+        const t = String(bodySnake.email).trim();
+        if (!t) return err('Email cannot be empty', 400);
+        if (!isValidEmailFormat(t)) return err('Enter a valid email address', 400);
+      }
       updated = await sql`
         UPDATE contacts SET
           name = COALESCE(${bodySnake.name as string ?? null}, name),
-          email = COALESCE(${bodySnake.email as string ?? null}, email),
+          email = COALESCE(${bodySnake.email != null ? String(bodySnake.email).trim() : null}, email),
           phone = COALESCE(${bodySnake.phone as string ?? null}, phone),
           role = COALESCE(${bodySnake.role as string ?? null}, role),
           last_modified_by = ${auth.userId},
@@ -450,27 +504,72 @@ export const handler: Handler = async (event: HandlerEvent) => {
         WHERE id = ${id} RETURNING *
       `;
     } else if (table === 'products') {
-      updated = await sql`
-        UPDATE products SET
-          name = COALESCE(${bodySnake.name as string ?? null}, name),
-          description = COALESCE(${bodySnake.description as string ?? null}, description),
-          category = COALESCE(${bodySnake.category as string ?? null}, category),
-          last_modified_by = ${auth.userId},
-          last_modified_at = NOW()
-        WHERE id = ${id} RETURNING *
-      `;
+      let newName: string | undefined;
+      if (bodySnake.name != null) {
+        const t = String(bodySnake.name).trim();
+        if (!t) return err('Product name cannot be empty', 400);
+        newName = t;
+        const conflict = await sql`
+          SELECT id FROM products WHERE id <> ${id} AND lower(trim(name)) = ${t.toLowerCase()} LIMIT 1
+        `;
+        if (conflict.length) return err('A product with this name already exists', 409);
+      }
+      try {
+        updated = await sql`
+          UPDATE products SET
+            name = COALESCE(${newName ?? null}, name),
+            description = COALESCE(${bodySnake.description != null ? String(bodySnake.description) : null}, description),
+            category = COALESCE(${bodySnake.category != null ? String(bodySnake.category) : null}, category),
+            last_modified_by = ${auth.userId},
+            last_modified_at = NOW()
+          WHERE id = ${id} RETURNING *
+        `;
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A product with this name already exists', 409);
+        throw e;
+      }
     } else if (table === 'models') {
-      updated = await sql`
-        UPDATE models SET
-          name = COALESCE(${bodySnake.name as string ?? null}, name),
-          sku = COALESCE(${bodySnake.sku as string ?? null}, sku),
-          stock = COALESCE(${bodySnake.stock != null ? Number(bodySnake.stock) : null}, stock),
-          price = COALESCE(${bodySnake.price != null ? Number(bodySnake.price) : null}, price),
-          last_modified_by = ${auth.userId},
-          last_modified_at = NOW()
-        WHERE id = ${id} RETURNING *
-      `;
+      let newSku: string | undefined;
+      if (bodySnake.sku != null) {
+        const t = String(bodySnake.sku).trim();
+        if (!t) return err('SKU cannot be empty', 400);
+        newSku = t;
+        const conflict = await sql`
+          SELECT id FROM models WHERE id <> ${id} AND lower(trim(sku)) = ${t.toLowerCase()} LIMIT 1
+        `;
+        if (conflict.length) return err('A model with this SKU already exists', 409);
+      }
+      let modelNameForUpdate: string | null | undefined;
+      if (bodySnake.name != null) {
+        const t = String(bodySnake.name).trim();
+        if (!t) return err('Model name cannot be empty', 400);
+        modelNameForUpdate = t;
+      }
+      try {
+        updated = await sql`
+          UPDATE models SET
+            name = COALESCE(${modelNameForUpdate ?? null}, name),
+            sku = COALESCE(${newSku ?? null}, sku),
+            stock = COALESCE(${bodySnake.stock != null ? Number(bodySnake.stock) : null}, stock),
+            price = COALESCE(${bodySnake.price != null ? Number(bodySnake.price) : null}, price),
+            last_modified_by = ${auth.userId},
+            last_modified_at = NOW()
+          WHERE id = ${id} RETURNING *
+        `;
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A model with this SKU already exists', 409);
+        throw e;
+      }
     } else if (table === 'leads') {
+      if (bodySnake.email != null) {
+        const t = String(bodySnake.email).trim();
+        if (!t) return err('Email cannot be empty', 400);
+        if (!isValidEmailFormat(t)) return err('Enter a valid email address', 400);
+        const conflict = await sql`
+          SELECT id FROM leads WHERE id <> ${id} AND lower(trim(email)) = ${t.toLowerCase()} LIMIT 1
+        `;
+        if (conflict.length) return err('A lead with this email already exists', 409);
+      }
       const newStatus = bodySnake.status as string | undefined;
       if (newStatus === 'converted') {
         const leadRows = await sql`SELECT id, name, email, phone, company FROM leads WHERE id = ${id} LIMIT 1`;
@@ -492,10 +591,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
           }
         }
       }
-      updated = await sql`
+      try {
+        updated = await sql`
         UPDATE leads SET
           name = COALESCE(${bodySnake.name as string ?? null}, name),
-          email = COALESCE(${bodySnake.email as string ?? null}, email),
+          email = COALESCE(${bodySnake.email != null ? String(bodySnake.email).trim() : null}, email),
           phone = COALESCE(${bodySnake.phone as string ?? null}, phone),
           company = COALESCE(${bodySnake.company as string ?? null}, company),
           status = COALESCE(${bodySnake.status as string ?? null}, status),
@@ -505,11 +605,20 @@ export const handler: Handler = async (event: HandlerEvent) => {
           last_modified_at = NOW()
         WHERE id = ${id} RETURNING *
       `;
+      } catch (e: unknown) {
+        if (isPgUniqueViolation(e)) return err('A lead with this email already exists', 409);
+        throw e;
+      }
     } else if (table === 'users') {
+      if (bodySnake.email != null) {
+        const t = String(bodySnake.email).trim();
+        if (!t) return err('Email cannot be empty', 400);
+        if (!isValidEmailFormat(t)) return err('Enter a valid email address', 400);
+      }
       updated = await sql`
         UPDATE users SET
           name = COALESCE(${bodySnake.name as string ?? null}, name),
-          email = COALESCE(${bodySnake.email as string ?? null}, email),
+          email = COALESCE(${bodySnake.email != null ? String(bodySnake.email).trim() : null}, email),
           role = COALESCE(${bodySnake.role as string ?? null}, role),
           last_modified_by = ${auth.userId},
           last_modified_at = NOW()

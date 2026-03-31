@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import { usePermissions } from '../context/PermissionsContext';
@@ -27,7 +27,7 @@ const COUNTRY_CODES = [
 export function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { customers, leads, getContactsByCustomer, addContact, deleteContact, deleteCustomer, updateCustomer } = useData();
+  const { customers, leads, getContactsByCustomer, addContact, deleteContact, deleteCustomer, updateCustomer, error } = useData();
   const { canEdit, canDelete, canAdd } = usePermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -37,6 +37,13 @@ export function CustomerDetail() {
     role: '',
   });
   const [contactPhoneCode, setContactPhoneCode] = useState<string>(COUNTRY_CODES[0].code);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(null), 5000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
 
   const customer = customers.find(c => c.id === id);
   const contacts = getContactsByCustomer(id || '');
@@ -54,9 +61,11 @@ export function CustomerDetail() {
     );
   }
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addContact({ ...formData, phone: `${contactPhoneCode}${formData.phone}`, customerId: customer.id });
+    const ok = await addContact({ ...formData, phone: `${contactPhoneCode}${formData.phone}`, customerId: customer.id });
+    if (!ok) return;
+    setSuccessMessage('Contact added successfully.');
     setFormData({ name: '', email: '', phone: '', role: '' });
     setContactPhoneCode(COUNTRY_CODES[0].code);
     setIsDialogOpen(false);
@@ -179,7 +188,13 @@ export function CustomerDetail() {
           <div className="flex items-center justify-between">
             <CardTitle>Contacts</CardTitle>
             {canAdd('contacts') && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (open) setSuccessMessage(null);
+              }}
+            >
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
@@ -191,6 +206,9 @@ export function CustomerDetail() {
                   <DialogTitle>Add New Contact</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleContactSubmit} className="space-y-4">
+                  {error && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+                  )}
                   <div>
                     <Label htmlFor="contact-name">Name</Label>
                     <Input
@@ -256,6 +274,11 @@ export function CustomerDetail() {
           </div>
         </CardHeader>
         <CardContent>
+          {successMessage && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4" role="status">
+              {successMessage}
+            </p>
+          )}
           {contacts.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No contacts yet</p>
@@ -282,7 +305,11 @@ export function CustomerDetail() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteContact(contact.id)}
+                    onClick={() => {
+                      if (window.confirm('Delete this contact? This cannot be undone.')) {
+                        deleteContact(contact.id);
+                      }
+                    }}
                   >
                     <Trash2 className="w-4 h-4 text-red-600" />
                   </Button>

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ObjectType } from '../types';
+import { INVALID_EMAIL_MESSAGE, isValidEmailFormat } from '../lib/emailValidation';
 import { LastModified } from '../components/LastModified';
 
 const OBJECT_LABELS: Record<ObjectType, string> = {
@@ -37,6 +38,10 @@ export function Users() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidEmailFormat(formData.email)) {
+      window.alert(INVALID_EMAIL_MESSAGE);
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       window.alert('Passwords do not match.');
       return;
@@ -73,6 +78,10 @@ export function Users() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    if (!isValidEmailFormat(editForm.email)) {
+      window.alert(INVALID_EMAIL_MESSAGE);
+      return;
+    }
     updateUser(editingUser.id, { name: editForm.name.trim(), email: editForm.email.trim() });
     setEditingUser(null);
   };
@@ -81,6 +90,10 @@ export function Users() {
     const email = editForm.email.trim();
     if (!email) {
       window.alert('Enter the user’s email first.');
+      return;
+    }
+    if (!isValidEmailFormat(email)) {
+      window.alert(INVALID_EMAIL_MESSAGE);
       return;
     }
     setResetLinkSending(true);

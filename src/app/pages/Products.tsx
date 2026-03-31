@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useData } from '../context/DataContext';
 import { usePermissions } from '../context/PermissionsContext';
+import { useAuth } from '../context/AuthContext';
 import { LastModified } from '../components/LastModified';
+import { ListSortControls } from '../components/ListSortControls';
+import { applyDir, compareDateStrings, userSortName, type ListSortKey, type SortDir } from '../lib/listSort';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -12,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../components/ui/label';
 
 export function Products() {
-  const { products, addProduct, deleteProduct, getModelsByProduct } = useData();
+  const { products, addProduct, deleteProduct, getModelsByProduct, error } = useData();
+  const { users } = useAuth();
   const { canRead, canAdd, canDelete } = usePermissions();
 
   if (!canRead('products')) {
@@ -23,6 +27,8 @@ export function Products() {
     );
   }
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<ListSortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -30,11 +36,33 @@ export function Products() {
     category: '',
   });
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (product.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return products.filter(
+      (product) =>
+        product.name.toLowerCase().includes(q) ||
+        product.category.toLowerCase().includes(q) ||
+        (product.description ?? '').toLowerCase().includes(q),
+    );
+  }, [products, searchTerm]);
+
+  const sortedProducts = useMemo(() => {
+    const list = [...filteredProducts];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      } else if (sortBy === 'createdAt') {
+        cmp = compareDateStrings(a.createdAt, b.createdAt);
+      } else {
+        const na = userSortName(users, a.createdBy ?? a.lastModifiedBy);
+        const nb = userSortName(users, b.createdBy ?? b.lastModifiedBy);
+        cmp = na.localeCompare(nb, undefined, { sensitivity: 'base' });
+      }
+      return applyDir(cmp, sortDir);
+    });
+    return list;
+  }, [filteredProducts, sortBy, sortDir, users]);
 
   const handleDeleteProduct = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -42,9 +70,10 @@ export function Products() {
     if (window.confirm('Delete this product and all its models?')) deleteProduct(id);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addProduct(formData);
+    const ok = await addProduct(formData);
+    if (!ok) return;
     setFormData({ name: '', description: '', category: '' });
     setIsDialogOpen(false);
   };
@@ -69,6 +98,9 @@ export function Products() {
               <DialogTitle>Add New Product</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+              )}
               <div>
                 <Label htmlFor="name">Product Name</Label>
                 <Input
@@ -103,8 +135,8 @@ export function Products() {
         )}
       </div>
 
-      <div className="mb-6">
-        <div className="relative">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
             placeholder="Search products..."
@@ -113,10 +145,17 @@ export function Products() {
             className="pl-10"
           />
         </div>
+        <ListSortControls
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortByChange={setSortBy}
+          onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          nameLabel="Product name (A–Z)"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => {
+        {sortedProducts.map((product) => {
           const models = getModelsByProduct(product.id);
           const totalStock = models.reduce((sum, model) => sum + model.stock, 0);
           
@@ -162,7 +201,7 @@ export function Products() {
         })}
       </div>
 
-      {filteredProducts.length === 0 && (
+      {sortedProducts.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No products found</p>
         </div>

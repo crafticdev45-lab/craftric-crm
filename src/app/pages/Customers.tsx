@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useData } from '../context/DataContext';
 import { usePermissions } from '../context/PermissionsContext';
+import { useAuth } from '../context/AuthContext';
 import { LastModified } from '../components/LastModified';
+import { ListSortControls } from '../components/ListSortControls';
+import { applyDir, compareDateStrings, userSortName, type ListSortKey, type SortDir } from '../lib/listSort';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
@@ -13,8 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 export function Customers() {
   const { customers, leads, addCustomer, deleteCustomer, getContactsByCustomer } = useData();
+  const { users } = useAuth();
   const { canAdd, canDelete } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<ListSortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -22,9 +28,28 @@ export function Customers() {
     leadId: '' as string | null,
   });
 
-  const filteredCustomers = customers.filter(customer =>
-    (customer.name ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCustomers = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return customers.filter((customer) => (customer.name ?? '').toLowerCase().includes(q));
+  }, [customers, searchTerm]);
+
+  const sortedCustomers = useMemo(() => {
+    const list = [...filteredCustomers];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+      } else if (sortBy === 'createdAt') {
+        cmp = compareDateStrings(a.createdAt, b.createdAt);
+      } else {
+        const na = userSortName(users, a.createdBy ?? a.lastModifiedBy);
+        const nb = userSortName(users, b.createdBy ?? b.lastModifiedBy);
+        cmp = na.localeCompare(nb, undefined, { sensitivity: 'base' });
+      }
+      return applyDir(cmp, sortDir);
+    });
+    return list;
+  }, [filteredCustomers, sortBy, sortDir, users]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,8 +143,8 @@ export function Customers() {
         )}
       </div>
 
-      <div className="mb-6">
-        <div className="relative">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
             placeholder="Search companies..."
@@ -128,10 +153,17 @@ export function Customers() {
             className="pl-10"
           />
         </div>
+        <ListSortControls
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortByChange={setSortBy}
+          onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          nameLabel="Company name (A–Z)"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCustomers.map((customer) => {
+        {sortedCustomers.map((customer) => {
           const contactCount = getContactsByCustomer(customer.id).length;
           const leadDisplay = getLeadDisplay(customer.leadId);
           return (
@@ -179,7 +211,7 @@ export function Customers() {
         })}
       </div>
 
-      {filteredCustomers.length === 0 && (
+      {sortedCustomers.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No companies found</p>
         </div>

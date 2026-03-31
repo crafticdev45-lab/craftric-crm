@@ -11,6 +11,7 @@ export interface Customer {
   status: 'active' | 'inactive' | 'pending';
   leadId: string | null;
   createdAt: string;
+  createdBy?: string;
   lastModifiedBy?: string;
   lastModifiedAt?: string;
 }
@@ -32,6 +33,7 @@ export interface Product {
   description: string;
   category: string;
   createdAt: string;
+  createdBy?: string;
   lastModifiedBy?: string;
   lastModifiedAt?: string;
 }

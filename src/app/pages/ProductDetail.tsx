@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import { usePermissions } from '../context/PermissionsContext';
@@ -13,7 +13,7 @@ import { Label } from '../components/ui/label';
 export function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { products, getModelsByProduct, addModel, deleteModel, deleteProduct, updateModel } = useData();
+  const { products, getModelsByProduct, addModel, deleteModel, deleteProduct, updateModel, error } = useData();
   const { canRead, canEdit, canDelete, canAdd } = usePermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -22,6 +22,13 @@ export function ProductDetail() {
     stock: 0,
     price: 0,
   });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(null), 5000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
 
   const product = products.find(p => String(p.id) === String(id));
   const models = getModelsByProduct(id || '');
@@ -53,13 +60,15 @@ export function ProductDetail() {
   const totalStock = models.reduce((sum, model) => sum + model.stock, 0);
   const totalValue = models.reduce((sum, model) => sum + (model.stock * model.price), 0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.price <= 0) {
       window.alert('Price must be greater than zero.');
       return;
     }
-    addModel({ ...formData, productId: product.id });
+    const ok = await addModel({ ...formData, productId: product.id });
+    if (!ok) return;
+    setSuccessMessage('Model added successfully.');
     setFormData({ name: '', sku: '', stock: 0, price: 0 });
     setIsDialogOpen(false);
   };
@@ -158,7 +167,13 @@ export function ProductDetail() {
           <div className="flex items-center justify-between">
             <CardTitle>Models</CardTitle>
             {canAdd('models') && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (open) setSuccessMessage(null);
+              }}
+            >
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
@@ -170,6 +185,9 @@ export function ProductDetail() {
                   <DialogTitle>Add New Model</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+                  )}
                   <div>
                     <Label htmlFor="model-name">Model Name</Label>
                     <Input
@@ -222,6 +240,11 @@ export function ProductDetail() {
           </div>
         </CardHeader>
         <CardContent>
+          {successMessage && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4" role="status">
+              {successMessage}
+            </p>
+          )}
           {models.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No models yet</p>

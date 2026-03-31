@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePermissions } from '../context/PermissionsContext';
+import { useAuth } from '../context/AuthContext';
 import { LastModified } from '../components/LastModified';
+import { ListSortControls } from '../components/ListSortControls';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Search, Mail, Phone, Building, Trash2, Pencil } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Building, Trash2, Pencil, Filter } from 'lucide-react';
+import { applyDir, compareDateStrings, userSortName, type ListSortKey, type SortDir } from '../lib/listSort';
+import { LEAD_FILTER_FIELDS, leadMatchesFieldFilter, type LeadFilterFieldKey } from '../lib/leadFilters';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -24,9 +28,15 @@ const COUNTRY_CODES = [
 ] as const;
 
 export function Leads() {
-  const { leads, addLead, updateLead, deleteLead } = useData();
+  const { leads, addLead, updateLead, deleteLead, error } = useData();
+  const { users } = useAuth();
   const { canAdd, canEdit, canDelete } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<ListSortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [filterField, setFilterField] = useState<LeadFilterFieldKey>('all');
+  const [filterValue, setFilterValue] = useState('');
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<typeof leads[0] | null>(null);
   const [formData, setFormData] = useState({
@@ -40,24 +50,48 @@ export function Leads() {
   });
   const [leadPhoneCode, setLeadPhoneCode] = useState<string>(COUNTRY_CODES[0].code);
 
-  const filteredLeads = leads.filter(lead =>
-    (lead.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (lead.company ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (lead.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const displayedLeads = useMemo(() => {
+    const sq = searchTerm.toLowerCase();
+    let list = leads.filter(
+      (lead) =>
+        (lead.name ?? '').toLowerCase().includes(sq) ||
+        (lead.company ?? '').toLowerCase().includes(sq) ||
+        (lead.email ?? '').toLowerCase().includes(sq),
+    );
+    list = list.filter((l) => leadMatchesFieldFilter(l, filterField, filterValue, users));
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+      } else if (sortBy === 'createdAt') {
+        cmp = compareDateStrings(a.createdAt, b.createdAt);
+      } else {
+        const na = userSortName(users, a.createdBy);
+        const nb = userSortName(users, b.createdBy);
+        cmp = na.localeCompare(nb, undefined, { sensitivity: 'base' });
+      }
+      if (cmp !== 0) return applyDir(cmp, sortDir);
+      return applyDir(String(a.id).localeCompare(String(b.id)), sortDir);
+    });
+    return list;
+  }, [leads, searchTerm, filterField, filterValue, users, sortBy, sortDir]);
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const filterActive = filterValue.trim().length > 0;
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addLead({ ...formData, phone: `${leadPhoneCode}${formData.phone}` });
+    const ok = await addLead({ ...formData, phone: `${leadPhoneCode}${formData.phone}` });
+    if (!ok) return;
     setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
     setLeadPhoneCode(COUNTRY_CODES[0].code);
     setIsDialogOpen(false);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLead) return;
-    updateLead(editingLead.id, formData);
+    const ok = await updateLead(editingLead.id, formData);
+    if (!ok) return;
     setEditingLead(null);
     setFormData({ name: '', email: '', phone: '', company: '', status: 'new', source: '', value: 0 });
   };
@@ -111,6 +145,9 @@ export function Leads() {
               <DialogTitle>Add New Lead</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleAddSubmit} className="space-y-4">
+              {error && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+              )}
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input
@@ -221,6 +258,9 @@ export function Leads() {
             <DialogTitle>Edit Lead</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4">
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+            )}
             <div>
               <Label htmlFor="edit-name">Name</Label>
               <Input
@@ -306,8 +346,8 @@ export function Leads() {
         </DialogContent>
       </Dialog>
 
-      <div className="mb-6">
-        <div className="relative">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
             placeholder="Search leads..."
@@ -316,10 +356,110 @@ export function Leads() {
             className="pl-10"
           />
         </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <ListSortControls
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSortByChange={setSortBy}
+            onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            nameLabel="Lead name (A–Z)"
+          />
+          <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filter
+                {filterActive && (
+                  <span className="rounded-full bg-primary/15 text-primary px-1.5 py-0.5 text-xs font-medium">On</span>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Filter leads</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="lead-filter-field">Field</Label>
+                  <Select
+                    value={filterField}
+                    onValueChange={(v) => {
+                      setFilterField(v as LeadFilterFieldKey);
+                      setFilterValue('');
+                    }}
+                  >
+                    <SelectTrigger id="lead-filter-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEAD_FILTER_FIELDS.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {filterField === 'status' ? (
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={filterValue || 'any'} onValueChange={(v) => setFilterValue(v === 'any' ? '' : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value="new">New</SelectItem>
+                        <SelectItem value="contacted">Contacted</SelectItem>
+                        <SelectItem value="qualified">Qualified</SelectItem>
+                        <SelectItem value="lost">Lost</SelectItem>
+                        <SelectItem value="converted">Converted</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="lead-filter-value">
+                      {filterField === 'all' ? 'Contains (any column)' : 'Value'}
+                    </Label>
+                    <Input
+                      id="lead-filter-value"
+                      value={filterValue}
+                      onChange={(e) => setFilterValue(e.target.value)}
+                      placeholder={
+                        filterField === 'value'
+                          ? 'e.g. 5000'
+                          : filterField === 'all'
+                            ? 'Type to match name, email, company…'
+                            : 'Filter…'
+                      }
+                    />
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilterField('all');
+                      setFilterValue('');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setFilterDialogOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredLeads.map((lead) => (
+        {displayedLeads.map((lead) => (
           <Card key={lead.id} className="hover:shadow-lg transition-shadow">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between mb-4">
@@ -407,7 +547,7 @@ export function Leads() {
         ))}
       </div>
 
-      {filteredLeads.length === 0 && (
+      {displayedLeads.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No leads found</p>
         </div>

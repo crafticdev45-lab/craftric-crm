@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS leads (
   last_modified_at TIMESTAMPTZ
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_email_lower ON leads (lower(trim(email)));
+
 -- Customers (companies)
 CREATE TABLE IF NOT EXISTS customers (
   id BIGSERIAL PRIMARY KEY,
@@ -81,6 +83,10 @@ CREATE TABLE IF NOT EXISTS models (
 CREATE INDEX IF NOT EXISTS idx_contacts_customer_id ON contacts(customer_id);
 CREATE INDEX IF NOT EXISTS idx_models_product_id ON models(product_id);
 CREATE INDEX IF NOT EXISTS idx_customers_lead_id ON customers(lead_id);
+
+-- One product name (case-insensitive, trimmed) and one SKU globally
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products (lower(trim(name)));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_models_sku_unique ON models (lower(trim(sku)));
 
 -- Create your first admin user via the API: POST /api/auth/signup with body { "name": "Admin", "email": "admin@example.com", "password": "your-password", "role": "admin" }
 -- Or use the app's Users page (after logging in with an existing user) to add users.

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import { isXanoEnabled, isNeonApi, xanoLogin as apiLogin, xanoMe, xanoList, xanoCreate, xanoUpdate, xanoDelete, XANO_ENDPOINTS, RateLimitError } from '@/lib/xano';
+import { isValidEmailFormat } from '../lib/emailValidation';
 
 const NEON_API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -174,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = async (id: string, updates: Partial<Pick<User, 'name' | 'email'>>) => {
+    if (updates.email != null && !isValidEmailFormat(updates.email)) return;
     if (!isXanoEnabled()) {
       const prev = users.find((u) => u.id === id);
       if (!prev) return;
@@ -220,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const addUser = async (user: Omit<User, 'id' | 'createdAt'> & { password?: string }) => {
+    if (!isValidEmailFormat(user.email)) return;
     if (!isXanoEnabled()) {
       const ts = new Date().toISOString();
       const newUser: User = {
