@@ -158,7 +158,12 @@ export function CustomerDetail() {
                 )}
               </div>
               <div className="pt-4 border-t border-gray-200">
-                <LastModified lastModifiedBy={customer.lastModifiedBy} lastModifiedAt={customer.lastModifiedAt} createdAt={customer.createdAt} />
+                <LastModified
+                  lastModifiedBy={customer.lastModifiedBy}
+                  lastModifiedAt={customer.lastModifiedAt}
+                  createdBy={customer.createdBy}
+                  createdAt={customer.createdAt}
+                />
               </div>
             </div>
           </CardContent>
@@ -286,25 +291,33 @@ export function CustomerDetail() {
           ) : (
             <div className="space-y-4">
               {contacts.map((contact) => (
-                <div key={contact.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div>
+                <div key={contact.id} className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 border border-gray-200 rounded-lg">
+                  <div className="min-w-0 flex-1">
                     <h3 className="font-medium text-gray-900">{contact.name}</h3>
                     <p className="text-sm text-gray-600">{contact.role}</p>
-                    <div className="flex items-center gap-4 mt-2">
+                    <div className="flex flex-wrap items-center gap-4 mt-2">
                       <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <Mail className="w-4 h-4" />
+                        <Mail className="w-4 h-4 shrink-0" />
                         <span>{contact.email}</span>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <Phone className="w-4 h-4" />
+                        <Phone className="w-4 h-4 shrink-0" />
                         <span>{contact.phone}</span>
                       </div>
                     </div>
+                    <LastModified
+                      lastModifiedBy={contact.lastModifiedBy}
+                      lastModifiedAt={contact.lastModifiedAt}
+                      createdBy={contact.createdBy}
+                      createdAt={contact.createdAt}
+                      className="mt-2"
+                    />
                   </div>
                   {canDelete('contacts') && (
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="shrink-0 self-start"
                     onClick={() => {
                       if (window.confirm('Delete this contact? This cannot be undone.')) {
                         deleteContact(contact.id);

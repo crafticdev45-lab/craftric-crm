@@ -23,6 +23,8 @@ export interface Contact {
   email: string;
   phone: string;
   role: string;
+  createdAt?: string;
+  createdBy?: string;
   lastModifiedBy?: string;
   lastModifiedAt?: string;
 }
@@ -45,6 +47,8 @@ export interface Model {
   sku: string;
   stock: number;
   price: number;
+  createdAt?: string;
+  createdBy?: string;
   lastModifiedBy?: string;
   lastModifiedAt?: string;
 }

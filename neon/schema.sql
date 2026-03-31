@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS customers (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'pending')),
   lead_id BIGINT REFERENCES leads(id),
   created_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_by BIGINT REFERENCES users(id),
   last_modified_by BIGINT REFERENCES users(id),
   last_modified_at TIMESTAMPTZ
 );
@@ -52,6 +53,8 @@ CREATE TABLE IF NOT EXISTS contacts (
   email TEXT NOT NULL,
   phone TEXT,
   role TEXT NOT NULL DEFAULT '',
+  created_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_by BIGINT REFERENCES users(id),
   last_modified_by BIGINT REFERENCES users(id),
   last_modified_at TIMESTAMPTZ
 );
@@ -63,6 +66,7 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL DEFAULT '',
   created_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_by BIGINT REFERENCES users(id),
   last_modified_by BIGINT REFERENCES users(id),
   last_modified_at TIMESTAMPTZ
 );
@@ -75,6 +79,8 @@ CREATE TABLE IF NOT EXISTS models (
   sku TEXT NOT NULL,
   stock INTEGER NOT NULL DEFAULT 0,
   price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_by BIGINT REFERENCES users(id),
   last_modified_by BIGINT REFERENCES users(id),
   last_modified_at TIMESTAMPTZ
 );

@@ -9,7 +9,12 @@ import { applyDir, compareDateStrings, userSortName, type ListSortKey, type Sort
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Search, Users, Trash2 } from 'lucide-react';
+import { Plus, Search, Users, Trash2, Filter } from 'lucide-react';
+import {
+  CUSTOMER_FILTER_FIELDS,
+  customerMatchesFieldFilter,
+  type CustomerFilterFieldKey,
+} from '../lib/customerProductFilters';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -21,6 +26,9 @@ export function Customers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<ListSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [filterField, setFilterField] = useState<CustomerFilterFieldKey>('all');
+  const [filterValue, setFilterValue] = useState('');
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -28,10 +36,20 @@ export function Customers() {
     leadId: '' as string | null,
   });
 
-  const filteredCustomers = useMemo(() => {
+  const searchFilteredCustomers = useMemo(() => {
     const q = searchTerm.toLowerCase();
     return customers.filter((customer) => (customer.name ?? '').toLowerCase().includes(q));
   }, [customers, searchTerm]);
+
+  const filteredCustomers = useMemo(
+    () =>
+      searchFilteredCustomers.filter((c) =>
+        customerMatchesFieldFilter(c, filterField, filterValue, users, leads),
+      ),
+    [searchFilteredCustomers, filterField, filterValue, users, leads],
+  );
+
+  const filterActive = filterValue.trim().length > 0;
 
   const sortedCustomers = useMemo(() => {
     const list = [...filteredCustomers];
@@ -143,7 +161,7 @@ export function Customers() {
         )}
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
@@ -153,13 +171,104 @@ export function Customers() {
             className="pl-10"
           />
         </div>
-        <ListSortControls
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSortByChange={setSortBy}
-          onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-          nameLabel="Company name (A–Z)"
-        />
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <ListSortControls
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSortByChange={setSortBy}
+            onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            nameLabel="Company name (A–Z)"
+          />
+          <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filter
+                {filterActive && (
+                  <span className="rounded-full bg-primary/15 text-primary px-1.5 py-0.5 text-xs font-medium">On</span>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Filter companies</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="customer-filter-field">Field</Label>
+                  <Select
+                    value={filterField}
+                    onValueChange={(v) => {
+                      setFilterField(v as CustomerFilterFieldKey);
+                      setFilterValue('');
+                    }}
+                  >
+                    <SelectTrigger id="customer-filter-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CUSTOMER_FILTER_FIELDS.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {filterField === 'status' ? (
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={filterValue || 'any'} onValueChange={(v) => setFilterValue(v === 'any' ? '' : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="customer-filter-value">
+                      {filterField === 'all' ? 'Contains (any column)' : 'Value'}
+                    </Label>
+                    <Input
+                      id="customer-filter-value"
+                      value={filterValue}
+                      onChange={(e) => setFilterValue(e.target.value)}
+                      placeholder={
+                        filterField === 'leadId'
+                          ? 'Lead name, company, or email…'
+                          : filterField === 'all'
+                            ? 'Type to match name, status, lead…'
+                            : 'Filter…'
+                      }
+                    />
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilterField('all');
+                      setFilterValue('');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setFilterDialogOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -202,7 +311,12 @@ export function Customers() {
                     <span>{contactCount} contact{contactCount !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="mt-4 pt-4 border-t border-gray-200">
-                    <LastModified lastModifiedBy={customer.lastModifiedBy} lastModifiedAt={customer.lastModifiedAt} createdAt={customer.createdAt} />
+                    <LastModified
+                      lastModifiedBy={customer.lastModifiedBy}
+                      lastModifiedAt={customer.lastModifiedAt}
+                      createdBy={customer.createdBy}
+                      createdAt={customer.createdAt}
+                    />
                   </div>
                 </CardContent>
               </Card>

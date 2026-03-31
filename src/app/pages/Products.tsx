@@ -10,8 +10,14 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Search, Package, Trash2 } from 'lucide-react';
+import { Plus, Search, Package, Trash2, Filter } from 'lucide-react';
+import {
+  PRODUCT_FILTER_FIELDS,
+  productMatchesFieldFilter,
+  type ProductFilterFieldKey,
+} from '../lib/customerProductFilters';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Label } from '../components/ui/label';
 
 export function Products() {
@@ -19,16 +25,12 @@ export function Products() {
   const { users } = useAuth();
   const { canRead, canAdd, canDelete } = usePermissions();
 
-  if (!canRead('products')) {
-    return (
-      <div className="p-8">
-        <p className="text-gray-600">You don&apos;t have permission to view products.</p>
-      </div>
-    );
-  }
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<ListSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [filterField, setFilterField] = useState<ProductFilterFieldKey>('all');
+  const [filterValue, setFilterValue] = useState('');
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -36,7 +38,7 @@ export function Products() {
     category: '',
   });
 
-  const filteredProducts = useMemo(() => {
+  const searchFilteredProducts = useMemo(() => {
     const q = searchTerm.toLowerCase();
     return products.filter(
       (product) =>
@@ -45,6 +47,16 @@ export function Products() {
         (product.description ?? '').toLowerCase().includes(q),
     );
   }, [products, searchTerm]);
+
+  const filteredProducts = useMemo(
+    () =>
+      searchFilteredProducts.filter((p) =>
+        productMatchesFieldFilter(p, filterField, filterValue, users),
+      ),
+    [searchFilteredProducts, filterField, filterValue, users],
+  );
+
+  const filterActive = filterValue.trim().length > 0;
 
   const sortedProducts = useMemo(() => {
     const list = [...filteredProducts];
@@ -77,6 +89,14 @@ export function Products() {
     setFormData({ name: '', description: '', category: '' });
     setIsDialogOpen(false);
   };
+
+  if (!canRead('products')) {
+    return (
+      <div className="p-8">
+        <p className="text-gray-600">You don&apos;t have permission to view products.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -135,7 +155,7 @@ export function Products() {
         )}
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
@@ -145,13 +165,85 @@ export function Products() {
             className="pl-10"
           />
         </div>
-        <ListSortControls
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSortByChange={setSortBy}
-          onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-          nameLabel="Product name (A–Z)"
-        />
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <ListSortControls
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSortByChange={setSortBy}
+            onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            nameLabel="Product name (A–Z)"
+          />
+          <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filter
+                {filterActive && (
+                  <span className="rounded-full bg-primary/15 text-primary px-1.5 py-0.5 text-xs font-medium">On</span>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Filter products</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-filter-field">Field</Label>
+                  <Select
+                    value={filterField}
+                    onValueChange={(v) => {
+                      setFilterField(v as ProductFilterFieldKey);
+                      setFilterValue('');
+                    }}
+                  >
+                    <SelectTrigger id="product-filter-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRODUCT_FILTER_FIELDS.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-filter-value">
+                    {filterField === 'all' ? 'Contains (any column)' : 'Value'}
+                  </Label>
+                  <Input
+                    id="product-filter-value"
+                    value={filterValue}
+                    onChange={(e) => setFilterValue(e.target.value)}
+                    placeholder={
+                      filterField === 'all'
+                        ? 'Type to match name, category, description…'
+                        : 'Filter…'
+                    }
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilterField('all');
+                      setFilterValue('');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setFilterDialogOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -192,7 +284,12 @@ export function Products() {
                       <p className="text-xs text-gray-500">Models</p>
                       <p className="font-bold text-gray-900">{models.length}</p>
                     </div>
-                    <LastModified lastModifiedBy={product.lastModifiedBy} lastModifiedAt={product.lastModifiedAt} createdAt={product.createdAt} />
+                    <LastModified
+                      lastModifiedBy={product.lastModifiedBy}
+                      lastModifiedAt={product.lastModifiedAt}
+                      createdBy={product.createdBy}
+                      createdAt={product.createdAt}
+                    />
                   </div>
                 </CardContent>
               </Card>

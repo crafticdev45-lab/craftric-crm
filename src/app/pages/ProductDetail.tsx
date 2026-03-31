@@ -130,7 +130,12 @@ export function ProductDetail() {
                 <p className="text-gray-900">{product.description}</p>
               </div>
               <div className="pt-4 border-t border-gray-200">
-                <LastModified lastModifiedBy={product.lastModifiedBy} lastModifiedAt={product.lastModifiedAt} createdAt={product.createdAt} />
+                <LastModified
+                  lastModifiedBy={product.lastModifiedBy}
+                  lastModifiedAt={product.lastModifiedAt}
+                  createdBy={product.createdBy}
+                  createdAt={product.createdAt}
+                />
               </div>
             </div>
           </CardContent>
@@ -322,7 +327,12 @@ export function ProductDetail() {
                   </div>
                   
                   <div className="mt-4 pt-4 border-t border-gray-200">
-                    <LastModified lastModifiedBy={model.lastModifiedBy} lastModifiedAt={model.lastModifiedAt} />
+                    <LastModified
+                      lastModifiedBy={model.lastModifiedBy}
+                      lastModifiedAt={model.lastModifiedAt}
+                      createdBy={model.createdBy}
+                      createdAt={model.createdAt}
+                    />
                     <div className="flex items-center justify-between text-sm mt-2">
                       <span className="text-gray-600">Total Value:</span>
                       <span className="font-bold text-gray-900">₹{(model.stock * model.price).toFixed(2)}</span>

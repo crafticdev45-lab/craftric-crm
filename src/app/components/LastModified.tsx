@@ -13,7 +13,7 @@ export function LastModified({ lastModifiedBy, lastModifiedAt, createdBy, create
   const modifier = lastModifiedBy ? users.find(u => u.id === lastModifiedBy) : null;
   const creator = createdBy ? users.find(u => u.id === createdBy) : null;
 
-  if (!lastModifiedAt && !createdAt) return null;
+  if (!lastModifiedAt && !createdAt && !createdBy) return null;
 
   return (
     <div className={`text-xs text-gray-500 space-y-0.5 ${className}`}>
@@ -28,6 +28,9 @@ export function LastModified({ lastModifiedBy, lastModifiedAt, createdBy, create
           Created: {new Date(createdAt).toLocaleDateString()}
           {creator && ` by ${creator.name}`}
         </p>
+      )}
+      {!createdAt && createdBy && creator && (
+        <p>Created by {creator.name}</p>
       )}
     </div>
   );

@@ -19,7 +19,7 @@ interface DataContextType {
   updateCustomer: (id: string, customer: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
   contacts: Contact[];
-  addContact: (contact: Omit<Contact, 'id'>) => Promise<boolean>;
+  addContact: (contact: Omit<Contact, 'id' | 'createdBy' | 'createdAt'>) => Promise<boolean>;
   updateContact: (id: string, contact: Partial<Contact>) => void;
   deleteContact: (id: string) => void;
   getContactsByCustomer: (customerId: string) => Contact[];
@@ -28,7 +28,7 @@ interface DataContextType {
   updateProduct: (id: string, product: Partial<Product>) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   models: Model[];
-  addModel: (model: Omit<Model, 'id'>) => Promise<boolean>;
+  addModel: (model: Omit<Model, 'id' | 'createdBy' | 'createdAt'>) => Promise<boolean>;
   updateModel: (id: string, model: Partial<Model>) => Promise<boolean>;
   deleteModel: (id: string) => void;
   getModelsByProduct: (productId: string) => Model[];
@@ -156,7 +156,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [authToken, currentUser?.id]);
 
-  const addContact = useCallback(async (contact: Omit<Contact, 'id'>) => {
+  const addContact = useCallback(async (contact: Omit<Contact, 'id' | 'createdBy' | 'createdAt'>) => {
     setError(null);
     if (!isValidEmailFormat(contact.email)) {
       setError(INVALID_EMAIL_MESSAGE);
@@ -164,12 +164,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     if (!isXanoEnabled()) {
       const ts = now();
-      const newContact: Contact = { ...contact, id: Date.now().toString(), lastModifiedBy: currentUser?.id, lastModifiedAt: ts };
+      const newContact: Contact = {
+        ...contact,
+        id: Date.now().toString(),
+        createdAt: ts.split('T')[0],
+        createdBy: currentUser?.id,
+        lastModifiedBy: currentUser?.id,
+        lastModifiedAt: ts,
+      };
       setContacts((prev) => [...prev, newContact]);
       return true;
     }
     try {
-      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.contacts, contact as Record<string, unknown>, authToken);
+      const raw = await xanoCreate<unknown>(
+        XANO_ENDPOINTS.contacts,
+        { ...contact, createdBy: currentUser?.id, createdAt: now().split('T')[0] } as Record<string, unknown>,
+        authToken,
+      );
       const created = raw ? (normalizeXanoRecord<Contact>(raw) as Contact) : null;
       if (created?.id && String(created.customerId) === String(contact.customerId)) {
         setContacts((prev) => [...prev, created]);
@@ -297,7 +308,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [authToken]);
 
-  const addModel = useCallback(async (model: Omit<Model, 'id'>) => {
+  const addModel = useCallback(async (model: Omit<Model, 'id' | 'createdBy' | 'createdAt'>) => {
     const sk = skuKey(model.sku);
     if (models.some((m) => skuKey(m.sku) === sk)) {
       setError('A model with this SKU already exists.');
@@ -306,12 +317,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setError(null);
     if (!isXanoEnabled()) {
       const ts = now();
-      const newModel: Model = { ...model, id: Date.now().toString(), lastModifiedBy: currentUser?.id, lastModifiedAt: ts };
+      const newModel: Model = {
+        ...model,
+        id: Date.now().toString(),
+        createdAt: ts.split('T')[0],
+        createdBy: currentUser?.id,
+        lastModifiedBy: currentUser?.id,
+        lastModifiedAt: ts,
+      };
       setModels((prev) => [...prev, newModel]);
       return true;
     }
     try {
-      const raw = await xanoCreate<unknown>(XANO_ENDPOINTS.models, model as Record<string, unknown>, authToken);
+      const raw = await xanoCreate<unknown>(
+        XANO_ENDPOINTS.models,
+        { ...model, createdBy: currentUser?.id, createdAt: now().split('T')[0] } as Record<string, unknown>,
+        authToken,
+      );
       const created = raw ? (normalizeXanoRecord<Model>(raw) as Model) : null;
       if (created?.id) setModels((prev) => [...prev, created]);
       else await fetchAll();
@@ -438,6 +460,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           email: lead.email,
           phone: lead.phone,
           role: 'Primary Contact',
+          createdAt: ts.split('T')[0],
+          createdBy: currentUser?.id,
           lastModifiedBy: currentUser?.id,
           lastModifiedAt: ts,
         };
@@ -461,7 +485,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (lead && updates.status === 'converted' && !alreadyConverted) {
           const newCustomer = await xanoCreate<Customer>(
             XANO_ENDPOINTS.customers,
-            { name: lead.company, status: 'active', leadId: lead.id } as Record<string, unknown>,
+            { name: lead.company, status: 'active', leadId: lead.id, createdBy: currentUser?.id } as Record<string, unknown>,
             authToken
           );
           const cust = Array.isArray(newCustomer) ? newCustomer[0] : newCustomer;
@@ -469,7 +493,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
             setCustomers((prev) => [...prev, cust as Customer]);
             const newContact = await xanoCreate<Contact>(
               XANO_ENDPOINTS.contacts,
-              { customerId: cust.id, name: lead.name, email: lead.email, phone: lead.phone ?? '', role: 'Primary Contact' } as Record<string, unknown>,
+              {
+                customerId: cust.id,
+                name: lead.name,
+                email: lead.email,
+                phone: lead.phone ?? '',
+                role: 'Primary Contact',
+                createdBy: currentUser?.id,
+                createdAt: now().split('T')[0],
+              } as Record<string, unknown>,
               authToken
             );
             const c = Array.isArray(newContact) ? newContact[0] : newContact;

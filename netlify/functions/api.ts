@@ -326,8 +326,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
       const status = (snake.status as string) || 'active';
       const lead_id = snake.lead_id != null ? Number(snake.lead_id) : null;
       const inserted = await sql`
-        INSERT INTO customers (name, status, lead_id, last_modified_by)
-        VALUES (${name}, ${status}, ${lead_id}, ${auth.userId})
+        INSERT INTO customers (name, status, lead_id, created_by, last_modified_by)
+        VALUES (${name}, ${status}, ${lead_id}, ${auth.userId}, ${auth.userId})
         RETURNING *
       `;
       return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
@@ -340,8 +340,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
       const phone = (snake.phone as string) || '';
       const role = (snake.role as string) || '';
       const inserted = await sql`
-        INSERT INTO contacts (customer_id, name, email, phone, role, last_modified_by)
-        VALUES (${customer_id}, ${name}, ${email}, ${phone}, ${role}, ${auth.userId})
+        INSERT INTO contacts (customer_id, name, email, phone, role, created_at, created_by, last_modified_by)
+        VALUES (${customer_id}, ${name}, ${email}, ${phone}, ${role}, CURRENT_DATE, ${auth.userId}, ${auth.userId})
         RETURNING *
       `;
       return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
@@ -357,8 +357,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
       if (dup.length) return err('A product with this name already exists', 409);
       try {
         const inserted = await sql`
-          INSERT INTO products (name, description, category, last_modified_by)
-          VALUES (${name}, ${description}, ${category}, ${auth.userId})
+          INSERT INTO products (name, description, category, created_by, last_modified_by)
+          VALUES (${name}, ${description}, ${category}, ${auth.userId}, ${auth.userId})
           RETURNING *
         `;
         return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
@@ -381,8 +381,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
       if (dupSku.length) return err('A model with this SKU already exists', 409);
       try {
         const inserted = await sql`
-          INSERT INTO models (product_id, name, sku, stock, price, last_modified_by)
-          VALUES (${product_id}, ${name}, ${sku}, ${stock}, ${price}, ${auth.userId})
+          INSERT INTO models (product_id, name, sku, stock, price, created_at, created_by, last_modified_by)
+          VALUES (${product_id}, ${name}, ${sku}, ${stock}, ${price}, CURRENT_DATE, ${auth.userId}, ${auth.userId})
           RETURNING *
         `;
         return json(rowToCamel((inserted[0] as Record<string, unknown>) || {}));
@@ -578,15 +578,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
         if (leadRow && existingCustomer.length === 0) {
           const companyName = (leadRow.company as string) || (leadRow.name as string) || 'Unknown';
           const insertedCustomer = await sql`
-            INSERT INTO customers (name, status, lead_id, last_modified_by)
-            VALUES (${companyName}, 'active', ${Number(id)}, ${auth.userId})
+            INSERT INTO customers (name, status, lead_id, created_by, last_modified_by)
+            VALUES (${companyName}, 'active', ${Number(id)}, ${auth.userId}, ${auth.userId})
             RETURNING id
           `;
           const newCustomerId = (insertedCustomer[0] as { id: number })?.id;
           if (newCustomerId) {
             await sql`
-              INSERT INTO contacts (customer_id, name, email, phone, role, last_modified_by)
-              VALUES (${newCustomerId}, ${(leadRow.name as string) || ''}, ${(leadRow.email as string) || ''}, ${(leadRow.phone as string) || ''}, 'Primary Contact', ${auth.userId})
+              INSERT INTO contacts (customer_id, name, email, phone, role, created_at, created_by, last_modified_by)
+              VALUES (${newCustomerId}, ${(leadRow.name as string) || ''}, ${(leadRow.email as string) || ''}, ${(leadRow.phone as string) || ''}, 'Primary Contact', CURRENT_DATE, ${auth.userId}, ${auth.userId})
             `;
           }
         }
